@@ -1,0 +1,31 @@
+{
+  "task": "throughput_dip",
+  "protocol": "sle",
+  "question": "吞吐量为什么掉坑？",
+  "primary_outcome": "throughput_kbps",
+  "reference": "past_10_seconds_within_stream",
+  "dip_fraction": 0.5,
+  "min_event_seconds": 0.3,
+  "block_seconds": 1,
+  "min_coverage": 0.8,
+  "lag_seconds": [
+    -1,
+    0,
+    1,
+    2,
+    5
+  ],
+  "seed": 20261023,
+  "candidate_causes": [
+    "interf_avg",
+    "weighted_interf_avg",
+    "rssi_valid",
+    "bitrate",
+    "pwrlev",
+    "abnormal_cnt",
+    "abort_cnt",
+    "cancel_cnt"
+  ],
+  "causal_question": "移除外部干扰后，同一条件下吞吐量会提高多少？",
+  "notes": "阈值是探索默认值，不是业务SLA；不能随机拆分重叠NPZ窗口"
+}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "通信数据因果诊断"
+  short_description: "通信数据自动可视化、吞吐量掉坑诊断、设备对比与可审计因果证据分析"
+  default_prompt: "使用 $analyze-wireless-causality 分析当前通信数据，先定位异常，再评估根因证据并提出验证实验。"

@@ -1,0 +1,7 @@
+# Generated runs and private measurements are deliberately excluded from source control.
+runs/
+validation/
+_build/
+docs/
+__pycache__/
+*.pyc
