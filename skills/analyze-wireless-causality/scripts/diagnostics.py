@@ -25,7 +25,7 @@ def summarize(d):
           "valid_rate_s":float(elapsed),"valid_rate_reports":int(valid.sum()),
           "throughput_kbps":float(np.average(g.loc[valid,"throughput_kbps"],weights=g.loc[valid,"dt"])) if elapsed>0 else np.nan,
           "throughput_p10_kbps":g.loc[valid,"throughput_kbps"].quantile(.1),
-          "rssi_median":g.rssi_valid.median() if "rssi_valid" in g else np.nan})
+          "rssi_median":g.rssi_valid.median() if "rssi_valid" in g and g.rssi_valid.notna().any() else np.nan})
         if "tx_flushed" in g:
             ok=g.tx_total.gt(0)&g.tx_ack.between(0,g.tx_total)
             row.update({"flush_positive_reports":int(g.tx_flushed.gt(0).sum()),
@@ -98,6 +98,8 @@ def lag_screen(blocks, candidates, outcomes, seed=20261023, lags=(-1,0,1,2,5),mi
                 for run_id,q in g[good].groupby(run[good]):
                     if len(q)<min_blocks: continue
                     x=q[feature].to_numpy(float);y=q[outcome].to_numpy(float)
+                    # Aggregation roundoff must not manufacture ranked variation from constants.
+                    if np.allclose(x,x[0],rtol=1e-12,atol=1e-12) or np.allclose(y,y[0],rtol=1e-12,atol=1e-12):continue
                     for lag in lags:
                         if lag>0: xx,yy=x[:-lag],y[lag:]
                         elif lag<0: xx,yy=x[-lag:],y[:lag]
@@ -126,42 +128,6 @@ def lag_screen(blocks, candidates, outcomes, seed=20261023, lags=(-1,0,1,2,5),mi
     result=pd.DataFrame(rows)
     result["q_shift_exploratory"]=bh_adjust(result.p_shift_exploratory)
     return result.sort_values(["q_shift_exploratory","p_shift_exploratory"]).reset_index(drop=True)
-
-def evidence_cards(screen,events,adapter):
-    cards=[]
-    hypotheses={
-      "interf_avg":("外部干扰升高","独立干扰器ON/OFF日志、功率、信道和随机化顺序；固定距离与业务负载"),
-      "weighted_interf_avg":("可用弱干扰信道恶化","逐信道扫描、跳频图及切换记录；确认指标更新时刻"),
-      "rssi_valid":("路径损耗或遮挡","距离/位置轨迹、姿态、天线信息；固定干扰的衰减器扫参"),
-      "bitrate":("自适应码率与业务供给变化","上层编码码率、下包量、PHY配置；随机化固定档位比较"),
-      "pwrlev":("发射功率控制反馈","控制器决策日志、实际dBm标定；随机化固定功率比较"),
-      "abnormal_cnt":("共享天线或调度资源异常","调度、抢占及队列日志；控制其他业务开关"),
-      "cancel_cnt":("软件取消或调度冲突","软件取消原因码与控制实验"),
-      "abort_cnt":("硬件取消或调度冲突","硬件取消原因码与控制实验"),
-      "channel_busy_pct":("Wi-Fi空口竞争","独立业务流和信道占用测量；固定负载/信道带宽"),
-      "phy_rate_mbps":("Wi-Fi PHY速率自适应","MCS/NSS/GI/带宽与速率控制决策日志"),
-      "retry_count":("Wi-Fi重传伴随链路劣化","确认分母和重试含义；不把重试计数等同独立根因")
-    }
-    for feature in adapter["causal_candidates"]:
-        title,next_test=hypotheses.get(feature,(feature,"补充领域干预与独立重复"))
-        s=screen[(screen.feature==feature)&(screen.lag_s>0)] if len(screen) else pd.DataFrame()
-        if len(s):
-            chosen=s.iloc[s.spearman_rho.abs().argmax()]
-            card={"hypothesis":title,"feature":feature,"level":"E1_association",
-              "strongest_descriptive_rho":chosen.spearman_rho,
-              "outcome":chosen.outcome,"lag_s":int(chosen.lag_s),"q_shift_exploratory":chosen.q_shift_exploratory,
-              "dataset":chosen.dataset,"segment":chosen.segment,"hdl":chosen.hdl,
-              "n_windows_in_example":int(chosen.n_blocks),
-              "eligible_streams":int(s.stream_id.nunique()),
-              "positive_rho_tests":int(s.spearman_rho.gt(0).sum()),"negative_rho_tests":int(s.spearman_rho.lt(0).sum()),
-              "detrended_rho":chosen.detrended_rho,
-              "selection":"maximum_absolute_rho_exploratory_not_confirmatory"}
-        else: card={"hypothesis":title,"feature":feature,"level":"E0_insufficient_variation_or_coverage"}
-        card.update({"next_test":next_test,
-            "not_identified_reason":"无独立处理分配记录；业务负载/环境/控制反馈仍可能混杂",
-            "root_cause_confirmed":False})
-        cards.append(card)
-    return cards
 
 def compare_devices(d, adapter, metric="throughput_kbps", seed=20261023):
     required=adapter.get("matched_covariates",["condition","pair_id"])

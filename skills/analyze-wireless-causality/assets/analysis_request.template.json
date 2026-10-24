@@ -1,21 +1,30 @@
 {
-  "task": "throughput_dip",
+  "schema_version": "2.0",
+  "task": "diagnose",
   "protocol": "sle",
-  "question": "吞吐量为什么掉坑？",
+  "question": "吞吐量为什么掉坑？请区分无线退化、控制响应和业务供给变化。",
   "primary_outcome": "throughput_kbps",
-  "reference": "past_10_seconds_within_stream",
-  "dip_fraction": 0.5,
-  "min_event_seconds": 0.3,
-  "block_seconds": 1,
-  "min_coverage": 0.8,
-  "lag_seconds": [
-    -1,
-    0,
-    1,
-    2,
-    5
-  ],
-  "seed": 20261023,
+  "scope": {},
+  "focus": {},
+  "detector": {
+    "mode": "relative",
+    "drop_fraction": 0.5,
+    "min_duration_s": 0.3,
+    "baseline_s": 10,
+    "min_history_reports": 30
+  },
+  "reference": {
+    "window_s": 10,
+    "lookback_s": 120,
+    "guard_s": 2,
+    "step_s": 2,
+    "min_coverage": 0.8,
+    "match_fields": [
+      "bitrate",
+      "pwrlev"
+    ]
+  },
+  "case_budget": 6,
   "candidate_causes": [
     "interf_avg",
     "weighted_interf_avg",
@@ -26,6 +35,21 @@
     "abort_cnt",
     "cancel_cnt"
   ],
-  "causal_question": "移除外部干扰后，同一条件下吞吐量会提高多少？",
-  "notes": "阈值是探索默认值，不是业务SLA；不能随机拆分重叠NPZ窗口"
+  "seed": 20261023,
+  "block_seconds": 1,
+  "min_coverage": 0.8,
+  "lag_seconds": [
+    -1,
+    0,
+    1,
+    2,
+    5
+  ],
+  "comparison": {
+    "metrics": [
+      "throughput_kbps"
+    ]
+  },
+  "causal_question": "移除外部干扰，在相同负载与工作条件下，吞吐量会改变多少？",
+  "notes": "探索规则；参考窗口仅用于诊断。"
 }

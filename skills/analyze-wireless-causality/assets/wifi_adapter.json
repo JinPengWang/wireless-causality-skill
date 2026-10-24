@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "protocol": "wifi",
   "loader": "mapped_csv",
   "interval": {
@@ -76,5 +76,42 @@
     "不能自动赋予失败计数音频卡顿含义",
     "计数器重置丢弃该差分；位宽未知不做wrap补偿",
     "配对设计仍需要独立设备复制，pair_id不是随机化证明"
-  ]
+  ],
+  "diagnostic_roles": {
+    "signal": [
+      "rssi_valid"
+    ],
+    "interference": [
+      "channel_busy_pct"
+    ],
+    "control": [
+      "phy_rate_mbps"
+    ],
+    "scheduler": []
+  },
+  "diagnostic_match_fields": [
+    "firmware",
+    "band_ghz",
+    "channel_width_mhz",
+    "offered_load_mbps"
+  ],
+  "diagnostic_thresholds": {
+    "rssi_valid": 3,
+    "interf_avg": 3,
+    "weighted_interf_avg": 3,
+    "channel_busy_pct": 10,
+    "ack_ratio": 0.1,
+    "delay_proxy_ms": 20,
+    "latency_ms": 3,
+    "stall_flag": 0.1,
+    "throughput_kbps": 1,
+    "bitrate": 1,
+    "pwrlev": 1,
+    "phy_rate_mbps": 10,
+    "abnormal_cnt": 0.5,
+    "cancel_cnt": 0.5,
+    "abort_cnt": 0.5,
+    "retry_count": 0.5
+  },
+  "threshold_note": "这些是原始单位的探索筛选下限，结合参考MAD使用；不是物理标准、SLA或显著性检验。"
 }

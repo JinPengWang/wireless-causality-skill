@@ -32,7 +32,7 @@ def make_figures(d,summary,events,blocks,screen,quality,out):
     means=[];flush=[];coverage=[]
     for name in datasets:
         q=d[d.dataset.eq(name)];valid=q.valid_rate_interval&q.throughput_kbps.notna()
-        means.append(np.average(q.loc[valid,"throughput_kbps"],weights=q.loc[valid,"dt"]))
+        means.append(np.average(q.loc[valid,"throughput_kbps"],weights=q.loc[valid,"dt"]) if valid.any() else np.nan)
         flush.append(100*q.stall_flag.mean() if "stall_flag" in q else len(q))
         coverage.append(100*valid.mean())
     labels=[x.replace("Before_0910_Mix","Mix").replace("0922_","") for x in datasets]
@@ -62,7 +62,7 @@ def make_figures(d,summary,events,blocks,screen,quality,out):
             if col=="throughput_kbps" and "baseline_kbps" in q:
                 ax.plot(q.time_s,q.baseline_kbps,color="#8998a4",lw=.7,label="过去10秒基线")
                 ax.legend(loc="upper right",fontsize=8)
-            if "stall_flag" in q:
+            if "stall_flag" in q and len(events):
                 for _,r in events[(events.stream_id==stream)&(events.kind=="flush_run")].iterrows():
                     ax.axvspan(r.start_s,r.end_s,color="#dd6262",alpha=.15)
         axes[-1,0].set_xlabel("本链路首条上报起的相对时间 / s；长缺报处断线")
@@ -122,63 +122,95 @@ details{border:1px solid #d9e4ea;padding:12px;margin:12px 0}summary{cursor:point
 @media print{body{background:white}main{padding:10px;max-width:none}h2{break-after:avoid}img,table{break-inside:avoid}details{display:block}}
 """
 
-def write_report(out,d,audit,quality,npz,summary,events,screen,cards,comparison,causal,plots,manifest):
-    out=Path(out)
-    body=["<div class='kicker'>WIRELESS DIAGNOSTICS · REPRODUCIBLE EVIDENCE</div>",
-      "<h1>通信数据专家诊断报告</h1>",
-      f"<p class='lead'>协议 {html.escape(manifest['protocol'].upper())} · {len(d):,} 条上报 · {d.segment.nunique()} 个片段 · 当前因果状态：{html.escape(causal['status'])}</p>",
-      "<div class='box warn'><b>结论边界：</b>本报告自动定位现象、筛选根因候选并记录证据。观测关联、时间先后与反事实因果效应分别标注。"
-      "红色事件区间来自超时放弃结果，不能反过来充当外部干扰处理标签。</div>",
-      "<h2>1 · 先核对数据含义</h2>",
-      "<p>SLE：tx_flushed保留原始计数，并派生 &gt;0 标志；total_tx_size是成功发送字节数，按真实dt换算链路吞吐量。"
-      "bitrate是源码率档位，不代表实际吞吐量。hdl是片段内链路，sn是日志字段，均不能代替物理设备身份。"
-      "Wi-Fi：使用适配器指定的应用字节计数；不把PHY速率或tx_failed视为SLE的等价字段。</p>",
-      "<p>短写的 mm:ss.s 时间不直接解析为完整日期；按每链路真实dt重建相对时间。原始文件及其哈希均保留。"
-      "空值不补零，无发送时ACK比例留空；长缺报、非正间隔切断窗口。当前阈值是探索设置，不是业务SLA。</p>",
-      table(audit[[c for c in ["dataset","rows","segments","dt_zero","dt_over_gap","dt_max_s","rssi_zero","flush_positive_reports","shortened_time_rows"] if c in audit]]),table(quality),"<h3>NPZ窗口审计</h3>",table(npz),
-      "<h2>2 · 异常现象与时间定位</h2>",
-      "<p>吞吐量掉坑：低于同一连续链路过去10秒活动吞吐量中位数的50%，持续至少0.3秒；基线至少30条有效记录。"
-      "只有在有效上报区间内检测，不跨缺报。短片段或长期持续低吞吐可能没有有效历史基线，因此零事件不等于性能健康。"
-      "业务负载未测量时，低吞吐不能单独证明链路故障。超时放弃事件同样要求持续至少0.3秒；总计数包含更短记录。</p>"]
-    for title,path in plots[:1]:body.append("<h3>"+html.escape(title)+"</h3><img src='"+portable_image(path)+"'>")
-    if len(events):
-        event_summary=events.groupby(["dataset","kind"]).agg(events=("event_id","size"),observed_event_seconds=("observed_duration_s","sum")).reset_index()
-        body.append(table(event_summary))
-        top=events[events.kind.eq("throughput_dip")].sort_values("observed_duration_s",ascending=False)
-        body.extend(["<h3>最长掉坑事件（选择规则公开，供专家复核）</h3>",
-          table(top[[c for c in ["event_id","dataset","condition","hdl","start_s","end_s","observed_duration_s","baseline_kbps","throughput_kbps","source_row_first","source_row_last"] if c in top]],12)])
-    for title,path in plots[1:]:
-        body.append("<details open><summary>"+html.escape(title)+"</summary><img src='"+portable_image(path)+"'></details>")
-    body.extend(["<h2>3 · 根因候选与反证路径</h2>",
-      "<p>1秒不重叠窗口内汇总，覆盖率≥80%；连续段至少60秒。扫描−1、0、1、2、5秒时滞。"
-      "正时滞表示特征先于结果，−1秒是未来特征对照。循环移位保留序列结构，全部检验统一BH校正；"
-      "p/q仅为平稳性等假设下的探索诊断，周期性与趋势仍可能误导，不能据此升级为因果。去线性趋势后的ρ作为敏感性对照。"
-      "h5/h6共享环境，不能当作两次独立试验。下表的最强关联经过搜索选择，不能作为预注册验证结果。</p>",
-      table(pd.DataFrame(cards)[[c for c in ["hypothesis","level","outcome","lag_s","strongest_descriptive_rho","q_shift_exploratory","next_test"] if c in pd.DataFrame(cards)]],20),
-      "<h3>强关联证据明细</h3>",
-      table(screen[[c for c in ["dataset","condition","hdl","feature","outcome","lag_s","n_blocks","spearman_rho","detrended_rho","q_shift_exploratory","time_relation"] if c in screen]],15),
-      "<h2>4 · 设备比较与因果识别</h2>",
-      "<h3>设备比较状态</h3><pre>"+html.escape(json.dumps(comparison,ensure_ascii=False,indent=2,default=str))+"</pre>",
-      "<h3>因果分析状态</h3><pre>"+html.escape(json.dumps(causal,ensure_ascii=False,indent=2,default=str))+"</pre>",
-      "<p>独立干扰日志到位后，随机化配对交叉试验入口按外部ON/OFF分段，剔除预先规定的稳定时间，"
-      "先合并同一会话内共享环境的链路，再求配对差；置信区间按独立会话重采样。"
-      "此版本不自动把观察研究包装成随机试验，未运行PCMCI、DoWhy或SHAP。</p>",
-      "<h2>5 · 下一轮最有价值的验证</h2>",
-      "<ol><li>提供独立干扰开关时间戳、发射功率、信道、业务流与随机化记录，核验与日志时钟的偏差。</li>"
-      "<li>补充设备型号/固件/物理序列映射、链路角色、上层下包量、编码码率和天线/位置。</li>"
-      "<li>固定负载与距离，随机化干扰ON/OFF顺序；重复独立会话并轮换设备，避免把连续100ms采样当独立复制。</li>"
-      "<li>以预先登记的吞吐量和真实音频卡顿为主要结果，区分超时放弃代理；留一会话验证并记录反证。</li></ol>",
-      "<h2>6 · 复现与审计</h2>",
-      "<p>tables/ 保存完整事件、分层汇总、关联结果和敏感性表；figures/ 保存PNG及可编辑SVG。"
-      "manifest.json记录输入哈希、配置、软件版本、代码哈希、随机种子及原始输入未改变检查。"
-      "结论追溯至事件ID、源文件、行号、会话与链路。报告不会将推断标签写回源数据。</p>",
-      "<pre>"+html.escape(json.dumps({k:manifest[k] for k in ["protocol","seed","source_files_unchanged","settings"]},ensure_ascii=False,indent=2))+"</pre>",
-      "<h2>方法依据</h2>",
-      "<p>采用先明确假设与识别条件、再估计并检验稳健性的流程："
-      "<a href='https://www.pywhy.org/dowhy/main/user_guide/causal_tasks/estimating_causal_effects/index.html'>DoWhy官方文档</a>。"
-      "时间序列探索需处理自相关与采样尺度："
-      "<a href='https://proceedings.mlr.press/v124/runge20a.html'>Runge (2020), PCMCI+</a>。"
-      "反事实与纵向因果推断基础：<a href='https://miguelhernan.org/whatifbook'>Hernán &amp; Robins, What If</a>。"
-      "Wi-Fi遥测口径参见<a href='https://docs.kernel.org/driver-api/80211/cfg80211.html'>Linux cfg80211文档</a>。</p>"])
-    page="<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>通信数据专家诊断</title><style>"+STYLE+"</style><main>"+"".join(body)+"</main></html>"
-    (out/"report.html").write_text(page,encoding="utf-8")
+
+def make_case_figures(d,casebook,adapter,out):
+    set_style();plots=[]
+    labels={"throughput_kbps":"成功吞吐量 / kbps","stall_flag":"超时放弃代理 / 0–1",
+            "latency_ms":"应用时延 / ms","rssi_valid":"信号 / 适配器单位",
+            "interf_avg":"干扰 / 源单位","weighted_interf_avg":"弱干扰指标 / 源单位",
+            "channel_busy_pct":"信道忙占比 / %","bitrate":"音频码率档位","pwrlev":"功率档位",
+            "phy_rate_mbps":"PHY配置速率 / Mbps","ack_ratio":"ACK比例",
+            "delay_proxy_ms":"等待代理 / ms"}
+    for case in casebook["cases"]:
+        ref=case["reference"];start=min(case["start_s"]-10,ref.get("start_s",case["start_s"]))
+        end=case["end_s"]+5
+        g=d[d.stream_id.eq(case["stream_id"])&d.piece.eq(case["piece"])&d.time_s.between(max(0,start),end)]
+        roles=adapter.get("diagnostic_roles",{})
+        fields=list(dict.fromkeys([case["outcome"]]+roles.get("interference",[])[:1]+roles.get("signal",[])[:1]+
+             ["ack_ratio","delay_proxy_ms"]+roles.get("control",[])[:1]))
+        fields=[x for x in fields if x in g and g[x].notna().any()][:6]
+        if not fields:continue
+        fig,axes=plt.subplots(len(fields),1,figsize=(12,1.7*len(fields)),sharex=True,squeeze=False)
+        for ax,field in zip(axes[:,0],fields):
+            ax.plot(g.time_s,g[field],lw=.85,color=COLORS[0])
+            ax.axvspan(case["start_s"],case["end_s"],color="#d56060",alpha=.18)
+            if ref["status"]=="selected":ax.axvspan(ref["start_s"],ref["end_s"],color="#267ca3",alpha=.14)
+            ax.set_ylabel(labels.get(field,field))
+        axes[-1,0].set_xlabel("同一连续链路的相对时间 / s")
+        fig.suptitle(case["case_id"]+" | "+case["condition"]+" | 链路 "+case["hdl"]+
+          "\n红色：分析窗口；蓝色：按固定规则选取的历史参考（非因果对照）",fontsize=11,y=1.02)
+        fig.tight_layout()
+        plots.append((case["case_id"],savefig(fig,Path(out),"case_"+case["case_id"])))
+    return plots
+
+def write_investigation_report(out,d,summary,casebook,capabilities,comparison,causal,plots,manifest):
+    """A concise human-facing view of the machine-readable investigation artifacts."""
+    contract=manifest["settings"]
+    body=["<div class='kicker'>WIRELESS EXPERT INVESTIGATION · V2</div>",
+      "<h1>通信问题调查</h1><p class='lead'>"+html.escape(contract["question"])+"</p>",
+      "<div class='box'>任务："+html.escape(contract["task"])+" · 主结果："+html.escape(contract["primary_outcome"])+
+      f" · 调查范围 {len(d):,} 条上报 · 选取 {casebook['case_count']} 个案例。"
+      "诊断对比、统计关联与已识别干预效应分别记录；诊断优先级不代表因果概率。</div>",
+      "<h2>执行契约与能力</h2><pre>"+html.escape(json.dumps(contract,ensure_ascii=False,indent=2))+"</pre>",
+      table(pd.DataFrame(capabilities["fields"])),
+      "<p>参考窗口不按候选原因或效果大小挑选：在同一连续链路内，按预先配置的窗口、间隔和配置条件寻找最近的合格历史窗口。"
+      "参考采用结果清洁条件筛选，仅用于诊断，不能当作反事实或ATE对照。无合格参考时保留失败原因。</p>",
+      "<h2>事件案例与竞争解释</h2>"]
+    notes=["# 通信问题调查",contract["question"],"任务："+contract["task"],"主结果："+contract["primary_outcome"],
+           "范围："+str(len(d))+" 条上报；契约："+contract["contract_id"],
+           "诊断参考不是反事实对照；所有案例解释上限为E1，除非另有已识别的独立干预结果。"]
+    if not casebook["cases"]:
+        body.append("<p>本任务未产生事件案例。无事件不等于健康；设备对比与因果任务使用各自的执行计划。</p>")
+    for case in casebook["cases"]:
+        body.append("<h3>"+html.escape(case["case_id"])+" · "+html.escape(case["condition"])+"</h3>")
+        body.append("<p>"+html.escape(f"链路 {case['hdl']}，{case['start_s']:.3f}–{case['end_s']:.3f} 秒；参考状态：{case['reference']['status']}")+"</p>")
+        notes.extend(["","## "+case["case_id"],f"链路 {case['hdl']}；{case['start_s']:.3f}–{case['end_s']:.3f} 秒",
+                      "参考状态："+case["reference"]["status"]+("；"+case["reference"].get("reason","") if case["reference"]["status"]!="selected" else "")])
+        values=pd.DataFrame([{"metric":name,**value} for name,value in case["metrics"].items()])
+        body.append(table(values[[x for x in ["metric","status","during","reference","difference","screening_threshold"] if x in values]],20))
+        body.append("<p>调查决策："+html.escape(case["decision"]["status"])+"；仍保留竞争解释。</p>")
+        notes.append("调查决策："+case["decision"]["status"])
+        for action in case["decision"]["next_actions"]:
+            notes.append("下一步："+action["action"]+"；区分："+action["distinguishes"])
+        if case["reference"]["status"]!="selected" and case.get("prelude",{}).get("status")=="available_unmatched_process_context":
+            body.append("<p>下表是配置未匹配的前置过程变化，只作过程描述，不能充当匹配对照。</p>")
+            body.append(table(pd.DataFrame([{"metric":name,**value} for name,value in case["trajectory_deltas"].items()]),15))
+        if len(case.get("configuration_phases",[]))>1:
+            phases=[{"phase":p["phase"],"start_s":p["start_s"],"end_s":p["end_s"],"settings":str(p["settings"]),"reference":p["reference"]["status"]} for p in case["configuration_phases"]]
+            body.append(table(pd.DataFrame(phases),20))
+        claims=[]
+        for h in case["hypotheses"]:
+            claims.append({"候选":h["title"],"证据状态":h["status"],"复核优先级":h["review_priority"],
+              "反证/限制":"；".join(h["counterevidence"]+h["limitations"]),"下一步":h["next_experiment"]})
+            notes.extend(["- "+h["title"]+"："+h["status"],
+                          "  支持："+json.dumps(h["support"],ensure_ascii=False,default=str),
+                          "  反证/限制："+"；".join(h["counterevidence"]+h["limitations"]),
+                          "  下一步："+h["next_experiment"]])
+        body.append(table(pd.DataFrame(claims),10))
+        for title,path in plots:
+            if title==case["case_id"]:body.append("<img src='"+portable_image(path)+"'>")
+    if not casebook["cases"]:
+        for title,path in plots:body.append("<details><summary>"+html.escape(title)+"</summary><img src='"+portable_image(path)+"'></details>")
+    body.extend(["<h2>设备对比与识别状态</h2><pre>"+html.escape(json.dumps(comparison,ensure_ascii=False,indent=2,default=str))+"</pre>",
+      "<pre>"+html.escape(json.dumps(causal,ensure_ascii=False,indent=2,default=str))+"</pre>",
+      "<h2>分层数据摘要</h2>",table(summary,30),
+      "<h2>证据追溯</h2><p>tables/casebook.json保存完整病例、精确原始行集合、参考选择和每条主张；"
+      "resolved_request.json保存实际执行设置。measurement_profiles记录打印值变化间隔，不能将它误称传感器刷新周期。"
+      "evidence_revision.json对比历史主张，未出现在新范围的案例不会被当作已反驳。manifest保存输入、代码、配置和种子。</p>",
+      "<p>时滞探索统一校正，多条链路不是独立实验重复。未来特征对照同样强或不可用时明确标记时间方向未分辨。"
+      "缺少业务入队、独立干预或设备身份时，保留竞争解释与能力边界。</p>"])
+    notes.extend(["","## 设备比较状态",json.dumps(comparison,ensure_ascii=False,indent=2,default=str),
+                  "","## 因果识别状态",json.dumps(causal,ensure_ascii=False,indent=2,default=str)])
+    page="<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>通信问题调查</title><style>"+STYLE+"</style><main>"+"".join(body)+"</main></html>"
+    Path(out,"report.html").write_text(page,encoding="utf-8")
+    Path(out,"analysis.md").write_text("\n\n".join(notes)+"\n",encoding="utf-8")

@@ -160,15 +160,22 @@ def load_mapped_csv(path,adapter):
                 g["counter_reset"]|=delta.lt(0)
                 val=delta.where(delta.ge(0)&g.valid_rate_interval)
                 if spec["kind"]=="cumulative_bytes": val=val*spec.get("scale",.008)/g.dt
-            else: val=raw*spec.get("scale",1)
+                else:val=val*spec.get("scale",1)
+            elif spec["kind"] in ["interval_bytes","interval_count"]:
+                val=raw.where(raw.ge(0)&g.valid_rate_interval)*spec.get("scale",.008 if spec["kind"]=="interval_bytes" else 1)
+                if spec["kind"]=="interval_bytes":val=val/g.dt
+            elif spec["kind"]=="gauge": val=raw*spec.get("scale",1)
+            else:raise ValueError("Unknown metric kind: "+str(spec["kind"]))
             g[dest]=val
+        g["piece"]=(g.piece.diff().fillna(1).ne(0)|g.counter_reset).cumsum()-1
         # Wi-Fi failures are not silently recoded to SLE stall events.
         frames.append(g)
     out=pd.concat(frames,ignore_index=True)
     session_origin=out.groupby("session_id")["_timestamp"].transform("min")
     out["session_time_s"]=(out._timestamp-session_origin).dt.total_seconds()
-    if not out.throughput_kbps.notna().any():
-        raise ValueError("No valid primary throughput measurements; verify the byte-counter mapping and timestamps")
+    if "throughput_kbps" not in out:out["throughput_kbps"]=np.nan
+    if not any(name in out and out[name].notna().any() for name in adapter["metrics"]):
+        raise ValueError("No valid metric observations; verify adapter mapping and timestamps")
     audit=pd.DataFrame([{"dataset":adapter["protocol"],"rows":len(out),
       "segments":out.segment.nunique(),"conditions":out.condition.nunique(),
       "dt_zero":int(out.dt.eq(0).sum()),"dt_missing":int(out.dt.isna().sum()),
@@ -177,7 +184,7 @@ def load_mapped_csv(path,adapter):
       "source_device_id":True,"source_intervention_log":False}])
     return out,audit,pd.DataFrame(),pd.DataFrame(),[Path(path)]
 
-def aggregate_blocks(d, seconds=1.0, min_coverage=.8):
+def aggregate_blocks(d, seconds=1.0, min_coverage=.8, extra_metrics=None, count_metrics=None):
     """Disjoint fixed windows within stream and continuous piece; retain missing windows."""
     rows=[]
     for (stream,piece),g in d.groupby(["stream_id","piece"],sort=False):
@@ -185,21 +192,26 @@ def aggregate_blocks(d, seconds=1.0, min_coverage=.8):
         # An interval belongs to its endpoint; boundary intervals are never split/invented.
         g["_block"]=np.floor((g.time_s-origin+1e-8)/seconds).astype(int)
         for k,q in g.groupby("_block",sort=False):
-            good=q.valid_rate_interval & q.throughput_kbps.notna()
+            good=q.valid_rate_interval
             seconds_observed=float(q.loc[good,"dt"].sum())
             row={"stream_id":stream,"session_id":q.session_id.iloc[0],"piece":int(piece),
               "block":int(k),"time_s":float(origin+k*seconds),"dataset":q.dataset.iloc[0],
               "condition":q.condition.iloc[0],"segment":q.segment.iloc[0],"hdl":q.hdl.iloc[0],
               "device_id":q.device_id.iloc[0],"coverage":min(seconds_observed/seconds,1.0),
               "observed_seconds":seconds_observed,"n_reports":len(q)}
-            if seconds_observed>0:
-                row["throughput_kbps"]=float(np.average(q.loc[good,"throughput_kbps"],weights=q.loc[good,"dt"]))
+            if (good & q.throughput_kbps.notna()).any():
+                valid=good & q.throughput_kbps.notna()
+                row["throughput_kbps"]=float(np.average(q.loc[valid,"throughput_kbps"],weights=q.loc[valid,"dt"]))
             else: row["throughput_kbps"]=np.nan
             metrics=["interf_avg","weighted_interf_avg","rssi_valid","bitrate","pwrlev",
               "abnormal_cnt","cancel_cnt","abort_cnt","delay_proxy_ms","channel_busy_pct",
               "phy_rate_mbps","retry_count","failure_count","latency_ms","stall_flag"]
-            for col in metrics:
-                if col in q: row[col]=q[col].mean()
+            for col in list(dict.fromkeys(metrics+list(extra_metrics or []))):
+                if col not in q:continue
+                valid=good&q[col].notna()
+                if not valid.any():row[col]=np.nan
+                elif col in (count_metrics or []):row[col]=q.loc[valid,col].sum()/q.loc[valid,"dt"].sum()
+                else:row[col]=float(q.loc[valid,col].iloc[0]) if q.loc[valid,col].nunique()==1 else float(np.average(q.loc[valid,col],weights=q.loc[valid,"dt"]))
             if "tx_ack" in q:
                 ok=q.tx_total.gt(0)&q.tx_ack.between(0,q.tx_total)
                 row["ack_ratio"]=q.loc[ok,"tx_ack"].sum()/q.loc[ok,"tx_total"].sum() if ok.any() else np.nan

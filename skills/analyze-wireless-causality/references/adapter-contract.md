@@ -32,7 +32,7 @@ pair_id标识真实采集配对；每个条件内两设备都必须观测。缺�
 ## 新增适配器
 
 复制wifi_adapter.json并显式写identity/metrics/kind/unit/scale/causal_candidates/matched_covariates。
-支持gauge、cumulative_count、cumulative_bytes；后者按scale/dt换算。
+支持gauge、cumulative_count、cumulative_bytes、interval_count、interval_bytes。字节计数单位必须byte，区间/差分字节按scale/dt换算；计数归一化按其定义使用。
 添加新loader只负责格式→共享模型，保留数据质量状态，不把因果逻辑藏进导入器。
 跨协议只比较同定义结果；协议原生指标用于各自机理解释。
 最小验收：单位换算、零分母、缺失、重置、重复时间、多设备隔离、缺报断段、已知合成机理。
@@ -42,3 +42,12 @@ pair_id标识真实采集配对；每个条件内两设备都必须观测。缺�
 Linux cfg80211把tx_bytes、tx_packets、tx_retries、tx_failed、signal、txrate等分别提供。
 使用这些字段前核对驱动实现、计数累计范围及其更新方式；txrate不是应用接收吞吐量。
 参考 https://docs.kernel.org/driver-api/80211/cfg80211.html
+
+## V2扩展要求
+
+声明diagnostic_roles（signal/interference/control/scheduler）、diagnostic_match_fields及diagnostic_thresholds。角色决定哪些领域假设能被检验；缺角色保持不可检验，不靠列名碰巧相似推断。
+阈值为原始单位探索下限，必须结合数据来源和参考MAD复核，不是通用物理阈值。
+自定义protocol配合loader=mapped_csv即可复用共享流程，无需增加CLI协议分支。
+没有吞吐量但有应用时延时可用latency_ms加absolute阈值；未测字段保留缺失。
+
+测量刷新周期如果有原始时间戳，应另行声明。measurement_profiles只是打印值变化统计，恒定值不能证明传感器没有更新。

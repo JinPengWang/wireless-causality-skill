@@ -1,107 +1,134 @@
 ---
 name: analyze-wireless-causality
-description: Analyze wireless communication telemetry for automatic visualization, throughput dips, stutter or timeout symptoms, matched device comparisons, root-cause hypotheses, and auditable causal evidence. Use for SLE/星闪 or Wi-Fi logs, questions such as 吞吐量为什么掉坑、设备A与其他设备有什么不同、为什么卡顿、分析干扰根因, and reusable communication diagnostics. Includes protocol adapters, deterministic Python tools, guarded randomized switchback estimation, and expert validation workflows.
+description: >-
+  Conduct question-driven wireless expert investigations: locate throughput dips or latency/stutter symptoms, explain a specified event with matched historical context and competing mechanisms, compare a device against a reference cohort, assess causal identification, and update an auditable evidence ledger. Use for SLE/星闪, Wi-Fi or an adapter-mapped protocol and questions such as 吞吐量为什么掉坑、这个事件的根因是什么、设备A与其他设备哪里不同、为什么不同. Includes executable request contracts, event cases, source-row evidence, negative checks and guarded randomized-intervention estimation.
 ---
 
-# 通信数据专家诊断
+# 通信问题调查
 
-把用户问题转成可检验的通信假设，运行可复现分析，交付现象、候选机理、反证和下一步实验。
-先读本文件；按任务读取下面的专项参考。不要先加载所有文档或全部原始数据。
+把专家问题变成可执行的调查契约，再用数据区分竞争解释。
+用确定性工具计算；用领域知识提出、修正假设；保留反证和测量缺口。
+不要把“生成大量图”或“找到最强相关”作为完成调查的标准。
 
-## 执行顺序
+## 1. 接收问题并选择调查路径
 
-1. **确定问题。** 区分现象定位、设备比较、预测、干预效应四种任务。
-   明确结果变量、参照窗口、比较单位和目标人群。默认把“wife”理解为用户语境中的 Wi-Fi。
-   缺少SLA时使用公开的探索阈值继续工作；不得称为业务故障定论。
-2. **确认字段语义。** 读取同名JSON、参数表与场景图。
-   SLE读 [sle-semantics.md](references/sle-semantics.md)；Wi-Fi/新协议读 [adapter-contract.md](references/adapter-contract.md)。
-   使用现有数据完成可执行部分，不因缺少因果识别信息而停掉数据审计和异常诊断。
-3. **运行确定性工具。** 从本技能目录定位脚本，使用当前项目Python。
-   所有输出放入一个新的运行目录，保留原始文件及来源哈希。
-4. **定位异常。** 读 report.html、事件表、覆盖率和敏感性表。
-   复核一个强异常和一个正常/反例片段；引用 event_id、源文件、行号、时间区间及链路。
-5. **生成候选机理。** 读 [diagnostic-playbooks.md](references/diagnostic-playbooks.md)。
-   结合通信机理、时间先后、分层对照、反向时滞及缺失机制解释；先列竞争解释再筛选。
-6. **评估因果识别。** 读 [causal-methods.md](references/causal-methods.md)。
-   未满足识别条件时标为“未识别”，不输出臆造的ATE、原因概率或责任百分比。
-   只有外部独立处理日志及经核验的设计支持时调用 switchback 估计器。
-7. **交付专家可复核结论。** 报告事实、解释、未解决问题、最小验证实验。
-   读 [expert-workflow.md](references/expert-workflow.md) 组织商业/学术结果及复核记录。
+先区分问题中的对象和所求结论。已有上下文足够时直接执行；只询问会改变分析选择的必要信息。
+“wife”在本项目语境中按Wi-Fi理解。读取源JSON和相应协议语义，不猜测设备身份或处理标签。
 
-## 命令
+| 用户要回答的问题 | task | 优先产物 |
+|---|---|---|
+| 数据能说明什么、哪里缺报 | overview | 能力矩阵、分层摘要 |
+| 哪里掉坑/卡顿、某个事件为什么 | diagnose | 事件病例、历史参考、竞争机制、反证 |
+| 设备A与参照设备有什么不同 | compare | 共同条件覆盖、按采集配对的差异 |
+| 关闭干扰或切策略会提高多少 | causal | 识别结果、条件效应或未识别原因 |
 
-把 <skill> 替换为此文件的父目录，把 <data> 替换为原始数据根目录。
-不要使用含空格的未加引号路径。输出目录必须为空。
+预测任务需另建训练/验证设计；本技能不将解释、预测与干预效应混为一谈。
 
-SLE 自动诊断：
+读取 [investigation-contract.md](references/investigation-contract.md)，把问题写成assets中的请求模板副本。
+明确primary_outcome、scope、focus、参考规则及比较单位；CLI和请求冲突、未知字段会报错，不静默忽略。
+primary_outcome支持throughput_kbps、stall_flag、latency_ms；时延需给绝对阈值。
+有业务SLA时优先用绝对阈值；没有时可用公开的相对探索规则，并保留持续慢速可能漏检的限制。
+
+## 2. 核验语义和可分析能力
+
+SLE读取 [sle-semantics.md](references/sle-semantics.md)；新协议读取 [adapter-contract.md](references/adapter-contract.md)。
+检查单位、方向、累计/区间计数、时间来源、字段真实更新方式和独立实验单位。
+capabilities记录缺失/常数/可变字段；measurement_profiles记录打印值变化，不能当作真实传感器刷新周期。
+
+核心边界：
+- tx_flushed保留计数，stall_flag是>0的超时放弃代理；缺QoE真值时不要直接称音频卡顿。
+- bitrate不是成功吞吐量，功率档位不是dBm；未确认单位的RSSI/干扰不构造已标定SNR。
+- hdl不是设备，sn不是设备身份；双链路、100ms记录、重叠NPZ窗口不是独立实验复制。
+- 不把缺报填0，不跨片段/缺报/计数器重置连接事件、差分或时滞。
+- fixed/normal/mix不是天然受控对照；场景图不自动赋予每个文件地点标签。
+
+## 3. 运行最小充分分析
+
+从本文件父目录定位脚本。输出放入新空目录；保留旧结果，不修改原始输入。
+建议Windows使用python -B -X utf8。运行时输入和代码改变会使结果无效。
+
 ~~~powershell
-python "<skill>/scripts/analyze.py" --protocol sle --data-root "<data>" --task diagnose --output "<data>/SLE_Expert_Workbench/runs/new_run"
+python -B -X utf8 "<skill>/scripts/analyze.py" --data-root "<data>" --request "<request.json>" --output "<new_run>"
 ~~~
 
-只做概览可用 --task overview。通过 --request 指定 assets/analysis_request.template.json 的副本调整阈值。
---task 是报告任务标记与探索开关；自然语言理解由调用此技能的Agent负责，不是脚本内置聊天服务。
-
-Wi-Fi 映射输入：
+SLE无需额外指定适配器。Wi-Fi用：
 ~~~powershell
-python "<skill>/scripts/analyze.py" --protocol wifi --input "<trace.csv>" --adapter "<skill>/assets/wifi_adapter.json" --task diagnose --output "<run>"
+python -B -X utf8 "<skill>/scripts/analyze.py" --protocol wifi --input "<trace.csv>" --request "<request.json>" --output "<new_run>"
 ~~~
 
-配对设备比较：
+其他协议提供--adapter；由adapter.loader选择读取器，不修改共享算法里的协议分支。
+overview、compare、causal不会隐式执行全局时滞扫描或挑选事件。diagnose仅对解析后的候选字段和主结果扫描。
+candidate_causes限定统计筛选；领域竞争解释仍要保留，不能只验证用户先入为主的一个原因。
+
+## 4. 用事件病例解释现象
+
+读取 [diagnostic-playbooks.md](references/diagnostic-playbooks.md) 和 [evidence-contract.md](references/evidence-contract.md)。
+优先读tables/casebook.json和analysis.md，再按需读全量事件与时滞表；不要把所有CSV加载进上下文。
+
+每个病例必须具备：
+1. 现象定义、时间区间、连续链路、精确原始行集合和测量口径。
+2. 参考窗口选择规则、配置是否一致、覆盖率及失败原因。
+3. 支持、反证、缺失信息、可检验的下一步，以及适用范围。
+4. 至少考虑无线条件、控制反馈、业务供给、调度和采集等竞争解释；不可测就明确保留。
+
+默认参考是同一连续链路内最近的合格历史窗口，隔开事件前保护间隔，并匹配预设配置。
+不依据候选原因或效果大小挑参考，不使用事件后的“好窗口”替代。
+参考的清洁结果筛选会造成选择偏差，因此只作诊断对照，不能当反事实或ATE控制。
+没有合格参考时保留unavailable，不能用别处的全局最强相关补成该事件的根因。
+事件内部配置变化时，读取configuration_phases及各阶段的单独参考；prelude/trajectory_deltas只描述前置过程，不能冒称配置匹配。
+检查onset_context：人工焦点可能截取已发生故障的一部分。之前已退化时先向前复核，不以焦点起点证明特征先行。
+
+检查固定±1秒的未来特征对照、去趋势结果、扫描/打印变化模式。
+未来关联同样强或对照缺失时明确写“时间方向未分辨”，不称“领先所以致因”。
+同一测量族和同环境双链路不累加为独立证据。优先级不是概率，不给“根因置信度93%”。
+
+## 5. 公平地比较设备，再解释差异
+
+读取 [comparison-design.md](references/comparison-design.md)。
+两设备可默认按名称确定符号方向；三个及以上必须明确reference_device和目标设备。
+先看共同条件覆盖率、未匹配条件和测量口径，再看差异；不自动给全体设备排冠军。
+多链路先声明共同link_role或缩小范围，不能混合不同方向/角色。
+
+SLE需要真实device_registry映射；没有身份时仍可描述链路表现，但正式设备比较返回blocked。
+同一设备重复采集不代表多台同型号独立复制。CI只对已有设备/配对条件描述，不证明设备原因。
+分析“为什么不同”时必须继续读取mechanism_contrasts，检查共同条件下信号/竞争/配置/可靠性代理的差异。
+分开暴露条件差、工作点/控制响应差、机制差和采集差；不能直接从配置相关推断固有缺陷。
+需要时间过程时，从共同条件和精确来源选择目标设备窗口，另起diagnose并聚焦该窗口；两次调查保留不同的比较单位。
+共同条件下观测指标相近但结果仍不同，应明确缺少的应用/队列/实现日志，不能把“排除几个指标”写成已定位硬件缺陷。
+
+## 6. 识别后才估计因果
+
+读取 [causal-methods.md](references/causal-methods.md)。
+先明确干预、结果、目标人群、时间尺度、混杂/中介/反馈和独立实验单位，再选设计。
+当前仅实现外部随机配对开关试验的条件估计：
 ~~~powershell
-python "<skill>/scripts/analyze.py" --protocol wifi --input "<trace.csv>" --task compare --output "<run>"
+python -B -X utf8 "<skill>/scripts/analyze.py" --data-root "<data>" --task causal --interventions "<independent_blocks.csv>" --design "<verified_design.json>" --output "<new_run>"
 ~~~
 
-SLE如另有真实设备映射，提供 --device-registry，格式见 assets/device_registry.template.csv。
-必须另外在适配器 matched_covariates 中明确共同条件，不得仅按设备名字比较。
+不能从tx_flushed、吞吐量阈值或假定周期反推出处理真值。
+设计模板默认false；核验分配记录、时钟和携带效应后填写，不为通过门槛而全部改true。
+质量→未来控制→未来质量必须按时间展开；估计总效应不随意调整中介/碰撞点。
+识别失败时报告not_identified和最小补数/实验方案；既有诊断证据照常保留。
 
-独立随机干预试验：
-~~~powershell
-python "<skill>/scripts/analyze.py" --protocol sle --data-root "<data>" --task causal --interventions "<external_blocks.csv>" --design "<verified_design.json>" --output "<run>"
-~~~
+## 7. 更新证据并完成调查
 
-先读因果方法参考，再填写模板。不得为了通过门槛而把未验证的 false 全改为 true。
+有新日志、专家纠正或新对照时，新建运行；用--previous-run读取旧casebook进行主张状态对比。
+范围/阈值变化、未选入病例不等于反驳；历史原始证据不可覆写。
+需要人工改变假设或匹配集合时，在notes说明原因，不能只保留有利的一次运行。
 
-## 当前已实现的能力
+完成前：
+- 复核一个强异常和一个反例；对关键数值检查原始行和正确分母。
+- 同时交付“已观测到什么、优先验证什么、尚未排除什么、下一步如何区分”。
+- 有条件时检查独立重复；没有时停止在相应证据级别，不反复扫描直到显著。
+- 用E0事实、E1候选、E2设计条件下识别、E3独立干预验证，E3不由本工具自动颁发。
+- 无法区分时明确并列候选，输出最便宜且能区分它们的取证动作，不臆造因果结论。
 
-- SLE base/chan/NPZ分层读取、输入哈希、时间格式与缺报审计。
-- 按真实dt计算成功发送吞吐量；超时放弃计数与阳性标志分开。
-- 连续观测段内掉坑检测、超时放弃事件、来源追溯和阈值敏感性。
-- 1秒不重叠窗口、前后时滞Spearman筛选、循环移位探索诊断、全族BH与去趋势对照。
-- 自包含HTML报告，PNG与SVG图，完整CSV/JSON审计输出。
-- Wi-Fi可配置字段映射、累积计数差分和重置隔离。
-- 两组设备的共同条件配对差异；按采集pair重采样，仍属描述性比较。
-- 真实外部随机配对开关试验的条件因果估计，按独立session聚类。
+## 资源与验收
 
-PCMCI/PCMCI+、DoWhy-GCM、DML、倾向评分、时变处理MSM和预测模型是方法扩展点。
-本版本没有执行它们，不得在报告中称“已完成”或把简单相关矩阵命名为自动因果图。
+- [expert-workflow.md](references/expert-workflow.md)：商业闭环、学术评估及Agent角色边界。
+- [sources.md](references/sources.md)：方法来源；PCMCI、DoWhy-GCM、DML/MSM只是扩展点，尚未运行。
+- assets/hypothesis_catalog.json：竞争机制、测量缺口和可检验实验。
+- scripts/test_core.py与scripts/test_investigation.py：实现与推理失败模式回归测试。
 
-## 禁止混淆
-
-- tx_flushed原值不是二元；stall_flag只是超时放弃代理，不是音频QoE真值。
-- bitrate不是成功吞吐量；功率档位不是dBm；未确认单位的RSSI/干扰不得虚标dBm或直接相减为SNR。
-- hdl不是设备，sn不是设备序列号；多个链路和100ms记录不代表独立实验重复。
-- normal/fixed/mix不是天然随机对照；场景图不能证明每个文件来自图中地点。
-- 不按“每30秒交替”合成干扰真值；episodes是结果派生，不能作为独立treatment。
-- 不把缺报填成0吞吐量/0错误；不跨缺报、片段、会话做差分、滞后、插值或事件连接。
-- NPZ缺失值使用掩码；同一原始区间产生的重叠窗口及同会话双链路必须同组切分。
-- 相关、Granger、SHAP、预测精度和显著性均不能单独证明因果。
-- 因果图里的控制反馈要按时间展开，不在同一时刻画未经说明的有向环。
-- 不调整总效应路径上的中介或碰撞点；不默认所有特征都进入“控制变量”。
-
-## 输出约定
-
-每次运行产生 report.html、manifest.json、resolved_adapter.json、figures/、tables/。
-重点读取 events.csv、lag_associations.csv、evidence_cards.json、causal_status.json、comparison_status.json。
-未满足条件必须保留明确的 blocked/not_identified 结果，不以空白表或零效应掩盖失败。
-输出目录已有文件时改用新目录；不要自动删除旧结果。
-
-写结论时使用 E0（事实/事件）、E1（关联/机理候选）、E2（特定设计假设下识别）、E3（独立实验验证）。
-E3由专家记录和新实验支持，本工具不会自动颁发。
-用“在本样本/本场景中观察到”“与假设一致”“尚未排除”表述证据边界。
-
-## 验证与扩展
-
-执行 scripts/test_core.py 验证单位、缺报、设备比较与因果估计。
-新增协议优先增加适配器，不修改共享算法中的字段含义；先用合成已知机制和缺失/重置反例验证。
-新增方法必须补充所需假设、可识别条件、失败状态和独立评估集。
-一个主Agent足以按角色顺序执行。只有用户或运行环境允许时才并行委派；统计计算必须来自同一版本脚本。
+一个主Agent按角色顺序执行即可。运行环境或技能验证流程允许时才委派独立任务；
+不要把预设答案交给验证者，也不要让多个Agent各自搜索后挑最有利的统计结果。

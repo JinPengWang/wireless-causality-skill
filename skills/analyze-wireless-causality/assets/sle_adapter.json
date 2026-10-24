@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.0",
+  "schema_version": "2.0",
   "protocol": "sle",
   "loader": "sle_bundle",
   "dataset_dirs": [
@@ -60,5 +60,46 @@
     "offered_load_mbps",
     "distance_m",
     "antenna_orientation"
-  ]
+  ],
+  "diagnostic_roles": {
+    "signal": [
+      "rssi_valid"
+    ],
+    "interference": [
+      "interf_avg",
+      "weighted_interf_avg"
+    ],
+    "control": [
+      "bitrate",
+      "pwrlev"
+    ],
+    "scheduler": [
+      "abnormal_cnt",
+      "cancel_cnt",
+      "abort_cnt"
+    ]
+  },
+  "diagnostic_match_fields": [
+    "bitrate",
+    "pwrlev"
+  ],
+  "diagnostic_thresholds": {
+    "rssi_valid": 3,
+    "interf_avg": 3,
+    "weighted_interf_avg": 3,
+    "channel_busy_pct": 10,
+    "ack_ratio": 0.1,
+    "delay_proxy_ms": 20,
+    "latency_ms": 3,
+    "stall_flag": 0.1,
+    "throughput_kbps": 1,
+    "bitrate": 1,
+    "pwrlev": 1,
+    "phy_rate_mbps": 10,
+    "abnormal_cnt": 0.5,
+    "cancel_cnt": 0.5,
+    "abort_cnt": 0.5,
+    "retry_count": 0.5
+  },
+  "threshold_note": "这些是原始单位的探索筛选下限，结合参考MAD使用；不是物理标准、SLA或显著性检验。"
 }
