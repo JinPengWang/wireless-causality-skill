@@ -1,0 +1,69 @@
+{
+  "schema_version": "2.0",
+  "meaning": "诊断优先级不是因果概率；支持与反证必须同时保留",
+  "hypotheses": [
+    {
+      "id": "external_interference",
+      "title": "外部干扰或空口竞争",
+      "needed": [
+        "independent_interference_log",
+        "per_channel_measurements",
+        "workload"
+      ],
+      "next_experiment": "固定距离与业务负载，独立记录并随机化干扰ON/OFF；核验扫描更新与日志时钟。",
+      "effort": "controlled_experiment"
+    },
+    {
+      "id": "path_loss",
+      "title": "路径损耗、遮挡或姿态变化",
+      "needed": [
+        "distance_or_attenuation",
+        "antenna_orientation"
+      ],
+      "next_experiment": "保持干扰与业务不变，进行受控衰减或姿态扫参，记录双方向测量。",
+      "effort": "controlled_experiment"
+    },
+    {
+      "id": "control_response",
+      "title": "码率或功率控制响应",
+      "needed": [
+        "controller_decisions",
+        "application_enqueue",
+        "actual_phy_parameters"
+      ],
+      "next_experiment": "对齐质量与控制决策时刻；区分先变的无线质量和后续保护响应，再做固定策略/自适应策略交叉。",
+      "effort": "additional_logs"
+    },
+    {
+      "id": "scheduler_contention",
+      "title": "调度、共享天线或取消异常",
+      "needed": [
+        "cancel_reason_codes",
+        "coexistence_activity"
+      ],
+      "next_experiment": "采集取消原因码与其他业务占用；在相同无线条件下控制其他业务开关。",
+      "effort": "additional_logs"
+    },
+    {
+      "id": "demand_change",
+      "title": "业务停发、供给下降或应用阻塞",
+      "needed": [
+        "application_enqueue",
+        "queue_depth",
+        "offered_load_measurement"
+      ],
+      "next_experiment": "先检查应用下包、编码器和队列日志，区分主动停流与链路阻塞；配置负载不能代替实测需求。",
+      "effort": "additional_logs"
+    },
+    {
+      "id": "collection_artifact",
+      "title": "采集、缺报或计数器问题",
+      "needed": [
+        "collector_heartbeat",
+        "independent_capture"
+      ],
+      "next_experiment": "核对采集器心跳、原始序列、计数器重置以及独立抓包，确认缺失是否与退化相关。",
+      "effort": "source_audit"
+    }
+  ]
+}

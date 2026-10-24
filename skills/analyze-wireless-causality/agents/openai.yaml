@@ -1,0 +1,4 @@
+interface:
+  display_name: "通信问题调查与根因证据"
+  short_description: "围绕专家问题定位异常、选择可比参考、核查竞争根因并追溯证据"
+  default_prompt: "使用 $analyze-wireless-causality 将通信问题转成调查契约，解释指定异常、核查竞争机制并提出最小验证实验。"

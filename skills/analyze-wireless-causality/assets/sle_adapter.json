@@ -1,0 +1,105 @@
+{
+  "schema_version": "2.0",
+  "protocol": "sle",
+  "loader": "sle_bundle",
+  "dataset_dirs": [
+    "0922_Fixed",
+    "0922_Normal",
+    "Before_0910_Mix"
+  ],
+  "interval": {
+    "nominal_s": 0.1,
+    "min_rate_s": 0.05,
+    "gap_s": 0.4
+  },
+  "counter_period_ms": 20,
+  "semantics": {
+    "total_tx_size": "成功发送字节数/本上报区间；链路吞吐量，不是应用层端到端吞吐量",
+    "tx_flushed": "超时放弃传输的计数；stall_flag=(tx_flushed>0)，不等同经音频验证的卡顿",
+    "bitrate": "源音频码率档位；不是吞吐量，不映射为PHY MCS",
+    "hdl": "片段内链路句柄；禁止作为设备型号或物理设备ID",
+    "sn": "日志序列字段；不作为设备序列号",
+    "ack_rate": "固件百分数；聚合用匹配记录的计数重算",
+    "rssi_avg": "原始单位未确认；0保留原值，但从信号推断中排除",
+    "interf_avg": "所有信道平均干扰原值；不是独立干扰开关",
+    "weighted_interf_avg": "弱干扰信道指标；非SNR",
+    "cnt_diff_total": "counter差累计，20ms换算只作延迟代理"
+  },
+  "default_outcome": "throughput_kbps",
+  "causal_candidates": [
+    "interf_avg",
+    "weighted_interf_avg",
+    "rssi_valid",
+    "bitrate",
+    "pwrlev",
+    "abnormal_cnt",
+    "cancel_cnt",
+    "abort_cnt"
+  ],
+  "rate_candidates": [
+    "interf_avg",
+    "rssi_valid",
+    "bitrate",
+    "abnormal_cnt"
+  ],
+  "exclusions_from_causes": [
+    "sn",
+    "hdl",
+    "time",
+    "stall_flag",
+    "tx_flushed"
+  ],
+  "evidence_ceiling": "E1_observational",
+  "band_ghz": 2.4,
+  "band_source": "user_statement_not_measured",
+  "matched_covariates": [
+    "condition",
+    "pair_id",
+    "firmware",
+    "band_ghz",
+    "offered_load_mbps",
+    "distance_m",
+    "antenna_orientation"
+  ],
+  "diagnostic_roles": {
+    "signal": [
+      "rssi_valid"
+    ],
+    "interference": [
+      "interf_avg",
+      "weighted_interf_avg"
+    ],
+    "control": [
+      "bitrate",
+      "pwrlev"
+    ],
+    "scheduler": [
+      "abnormal_cnt",
+      "cancel_cnt",
+      "abort_cnt"
+    ]
+  },
+  "diagnostic_match_fields": [
+    "bitrate",
+    "pwrlev"
+  ],
+  "diagnostic_thresholds": {
+    "rssi_valid": 3,
+    "interf_avg": 3,
+    "weighted_interf_avg": 3,
+    "channel_busy_pct": 10,
+    "ack_ratio": 0.1,
+    "delay_proxy_ms": 20,
+    "latency_ms": 3,
+    "stall_flag": 0.1,
+    "throughput_kbps": 1,
+    "bitrate": 1,
+    "pwrlev": 1,
+    "phy_rate_mbps": 10,
+    "abnormal_cnt": 0.5,
+    "cancel_cnt": 0.5,
+    "abort_cnt": 0.5,
+    "retry_count": 0.5
+  },
+  "threshold_note": "这些是原始单位的探索筛选下限，结合参考MAD使用；不是物理标准、SLA或显著性检验。"
+}
