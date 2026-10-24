@@ -21,4 +21,3 @@
 项目私有依据：SLE参数对照表_0813.xlsx的SLE Log Params第10–33行；
 三个数据目录各自base/chan/dynamics/episodes JSON；场景介绍.png；当前用户采集说明。
 不访问参数表内未提供内容的内部wiki，不假称阅读内部标准。
-

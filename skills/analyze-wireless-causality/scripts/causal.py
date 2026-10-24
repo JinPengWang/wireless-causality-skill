@@ -94,4 +94,3 @@ def estimate_switchback(d,blocks,design,seed=20261023):
         result["signflip_assumption"]="whole-session joint treatment-label swaps allowed by randomization design"
         result["leave_one_session_out_range"]=[float(np.min((v.sum()-v)/(n-1))),float(np.max((v.sum()-v)/(n-1)))]
     return result,e
-

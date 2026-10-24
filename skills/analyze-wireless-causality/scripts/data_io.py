@@ -206,4 +206,3 @@ def aggregate_blocks(d, seconds=1.0, min_coverage=.8):
             row["eligible"]=row["coverage"]>=min_coverage
             rows.append(row)
     return pd.DataFrame(rows)
-

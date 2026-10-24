@@ -45,4 +45,3 @@ def main():
       "independent_sessions":10,"warning":"Software validation only, not evidence about real SLE or Wi-Fi performance"})
     print(str(a.output.resolve()))
 if __name__=="__main__":main()
-

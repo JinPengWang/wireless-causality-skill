@@ -197,4 +197,3 @@ def compare_devices(d, adapter, metric="throughput_kbps", seed=20261023):
         result["conditional_pair_bootstrap_95ci"]=np.quantile(boot,[.025,.975]).tolist()
     else: result["interval_status"]="少于5个采集配对，不报告可推广置信区间"
     return result,pairs
-

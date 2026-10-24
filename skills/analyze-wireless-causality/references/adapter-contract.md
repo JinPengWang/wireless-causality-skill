@@ -42,4 +42,3 @@ pair_id标识真实采集配对；每个条件内两设备都必须观测。缺�
 Linux cfg80211把tx_bytes、tx_packets、tx_retries、tx_failed、signal、txrate等分别提供。
 使用这些字段前核对驱动实现、计数累计范围及其更新方式；txrate不是应用接收吞吐量。
 参考 https://docs.kernel.org/driver-api/80211/cfg80211.html
-

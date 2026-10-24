@@ -135,4 +135,3 @@ if __name__=="__main__":
     try:sys.exit(main())
     except (ValueError,RuntimeError) as e:
         print("ANALYSIS_BLOCKED: "+str(e),file=sys.stderr);sys.exit(2)
-

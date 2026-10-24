@@ -182,4 +182,3 @@ def write_report(out,d,audit,quality,npz,summary,events,screen,cards,comparison,
       "Wi-Fi遥测口径参见<a href='https://docs.kernel.org/driver-api/80211/cfg80211.html'>Linux cfg80211文档</a>。</p>"])
     page="<!doctype html><html lang='zh-CN'><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'><title>通信数据专家诊断</title><style>"+STYLE+"</style><main>"+"".join(body)+"</main></html>"
     (out/"report.html").write_text(page,encoding="utf-8")
-
