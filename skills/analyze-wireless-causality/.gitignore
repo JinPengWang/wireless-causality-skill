@@ -1,0 +1,7 @@
+logs/*
+!logs/.gitkeep
+results/*
+!results/.gitkeep
+__pycache__/
+*.pyc
+tools/runs/

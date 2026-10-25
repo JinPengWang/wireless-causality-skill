@@ -1,0 +1,57 @@
+{
+  "question": "REPLACE_QUESTION",
+  "scope": "REPLACE_SCOPE",
+  "measurement_contract": "REPLACE_MEASUREMENT_DEFINITIONS",
+  "phenomena": [
+    {
+      "id": "P1",
+      "statement": "REPLACE_STATEMENT",
+      "status": "observed",
+      "calculation": "REPLACE_POPULATION_FORMULA_WINDOW_AND_SELECTION",
+      "evidence": [
+        {
+          "path": "REPLACE_ARTIFACT",
+          "sha256": "REPLACE_HASH",
+          "locator": "REPLACE_ROW_OR_KEY"
+        }
+      ],
+      "figures": [
+        {
+          "path": "../../results/REPLACE_RUN/figure.png",
+          "caption": "REPLACE_AXES_UNITS_WEIGHTING_UNCERTAINTY_AND_INTERPRETATION"
+        }
+      ],
+      "limitations": "REPLACE_LIMITATIONS"
+    }
+  ],
+  "findings": [
+    {
+      "id": "H1",
+      "statement": "REPLACE_STATEMENT",
+      "status": "candidate",
+      "calculation": "REPLACE_POPULATION_FORMULA_WINDOW_AND_SELECTION",
+      "evidence": [
+        {
+          "path": "REPLACE_ARTIFACT",
+          "sha256": "REPLACE_HASH",
+          "locator": "REPLACE_ROW_OR_KEY"
+        }
+      ],
+      "figures": [
+        {
+          "path": "../../results/REPLACE_RUN/figure.png",
+          "caption": "REPLACE_AXES_UNITS_WEIGHTING_UNCERTAINTY_AND_INTERPRETATION"
+        }
+      ],
+      "limitations": "REPLACE_LIMITATIONS",
+      "priority": 1,
+      "priority_reason": "REPLACE_EVIDENCE_IMPACT_REPLICATION_AND_COUNTEREVIDENCE",
+      "mechanism": "REPLACE_MECHANISM",
+      "support": "REPLACE_SUPPORT",
+      "counterevidence": "REPLACE_COUNTEREVIDENCE",
+      "next_test": "REPLACE_DISCRIMINATING_TEST"
+    }
+  ],
+  "limitations": "REPLACE_GAPS_AND_SCOPE_LIMITS",
+  "reproduce": "REPLACE_ENVIRONMENT_VERSIONS_COMMANDS_SEED_AND_INPUT_HASHES"
+}

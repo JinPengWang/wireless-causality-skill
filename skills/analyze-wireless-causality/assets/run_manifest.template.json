@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "question": null,
+  "task": "explore",
+  "input_root": null,
+  "allowed_input_extensions": [],
+  "runtime": {
+    "conda_name": null,
+    "conda_prefix": null,
+    "resolved_executable": null
+  },
+  "primary_outcome": {
+    "metric": null,
+    "unit": null,
+    "bad_direction": null,
+    "definition": null
+  },
+  "sources": [],
+  "filename_parser": null,
+  "entities": [],
+  "topology": null,
+  "comparison": {
+    "reference": null,
+    "factor_of_interest": null,
+    "pre_exposure_match_fields": [],
+    "condition_definitions": {},
+    "independent_unit": null,
+    "weighting": null
+  },
+  "time": {
+    "clock_transforms": [],
+    "phase_annotations": [],
+    "phase_evidence": null,
+    "alignment_uncertainty_s": null
+  },
+  "windows": {
+    "primary_s": null,
+    "sensitivity_s": [],
+    "minimum_counts": null,
+    "minimum_coverage": null,
+    "justification": null
+  },
+  "capabilities": {},
+  "metadata_conflicts": [],
+  "assumptions": [],
+  "report_language": "English"
+}
