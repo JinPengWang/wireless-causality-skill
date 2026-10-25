@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "window_s": 1.0,
+  "sources": [
+    {
+      "path": "REPLACE_WITH_SELECTED_TABLE.xlsx",
+      "sheet": "REPLACE_WITH_SHEET",
+      "metadata": {
+        "run_id": "REPLACE_RUN",
+        "entity": "REPLACE_ENTITY",
+        "direction": "unknown",
+        "condition": "unknown",
+        "pair_id": "unpaired"
+      },
+      "time": {
+        "start": "interval_start",
+        "end": "interval_end",
+        "scale": 1.0,
+        "origin": 0.0,
+        "split_policy": "reject"
+      },
+      "metrics": [
+        {
+          "name": "application_receive_mbps",
+          "unit": "Mbps",
+          "kind": "interval_amount",
+          "column": "received_bytes",
+          "scale": 8e-06,
+          "definition": "Received application bytes over each source interval; verify endpoint, direction and duplicate stream handling."
+        }
+      ]
+    }
+  ]
+}
