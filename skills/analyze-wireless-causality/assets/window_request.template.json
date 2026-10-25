@@ -26,7 +26,8 @@
           "kind": "interval_amount",
           "column": "received_bytes",
           "scale": 8e-06,
-          "definition": "Received application bytes over each source interval; verify endpoint, direction and duplicate stream handling."
+          "definition": "Received application bytes over each source interval; verify endpoint, direction and duplicate stream handling.",
+          "measurement_id": "REPLACE_WITH_REVIEWED_SHARED_MEASUREMENT_ID"
         }
       ]
     }

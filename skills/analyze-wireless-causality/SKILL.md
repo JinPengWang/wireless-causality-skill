@@ -39,7 +39,7 @@ conda run -p <environment-prefix> python tools/check_environment.py --expected-p
 python tools/audit_workbooks.py --input <selected.xlsx> --output logs/<run_id>/audit.json
 ```
 
-Set the working directory to the folder containing this SKILL.md, and use absolute input paths in resolved configurations. Use the verified interpreter consistently for subsequent commands. The examples below abbreviate it as `python`.
+Set the working directory to the folder containing this SKILL.md, and use absolute input paths in resolved configurations. Use the verified interpreter consistently for subsequent commands. Treat nonzero exits as blocked steps; reuse an older artifact only when its source/configuration provenance still matches. The examples below abbreviate it as `python`.
 
 ## 3. Frame the task and record a measurement contract
 
@@ -71,9 +71,9 @@ For IEEE 802.11 captures, read [references/wifi-analysis.md](references/wifi-ana
 
 ## 5. Construct comparable measurements
 
-Specify the same measurement definition, layer, direction, eligibility filters, time grid and denominator across compared entities. Retain raw numerators and denominators. Never average percentages when their denominators differ.
+Specify the same measurement definition, layer, direction, eligibility filters, time grid and denominator across compared entities. Retain raw numerators and denominators. Pool numerators and denominators when estimating a pooled fraction. Equal-weight averages of independently defined per-run effects are a different estimand; name that estimand explicitly.
 
-Use [references/metrics-and-time.md](references/metrics-and-time.md) to choose windows and align sources. Do not treat a common reporting default as a universal PER window. Predeclare a primary window based on timing resolution and sample support, then use a small declared sensitivity set. Record low-count or missing windows explicitly.
+Use [references/metrics-and-time.md](references/metrics-and-time.md) to choose windows and align sources. Do not treat a common reporting default as a universal PER window. Predeclare a primary window based on timing resolution and sample support, then use a small declared sensitivity set. Record low-count or missing windows explicitly. Set metric-specific `min_observations` or `min_denominator` where justified; preserve excluded numerators, denominators and source rows. Do not discard valid zero-event count windows merely because they contain no events.
 
 If requested, calculate `effective_rate_proxy = datarate * (1 - PER)` using a documented rate aggregation and PER definition on the same eligible population and window. Label it as a rate proxy. Keep independently measured application throughput separate; do not substitute retry-flag fraction for PER or fabricate PER when reception evidence is unavailable.
 
@@ -83,7 +83,7 @@ Map supported tables with `assets/window_request.template.json`, then run:
 python tools/build_windows.py --request logs/<run_id>/window_request.json --output logs/<run_id>/windows.json
 ```
 
-This tool supports explicitly mapped interval means, interval amounts, count ratios, event means, event counts, event sums and normalized binary fractions. It does not infer units, decode free text, difference cumulative counters or synchronize clocks. For unsupported sources, add a small adapter in tools, validate it on known examples, and record the resulting mapping and formula. Never use an unchecked generic `eval` transformation.
+This tool supports explicitly mapped interval means, interval amounts, count ratios, event means, event counts, event sums and normalized binary fractions. It validates decimal window boundaries and preserves empty complete captures separately from missing amounts. It does not infer units, decode free text, difference cumulative counters or synchronize clocks. Give compatible metrics a reviewed `measurement_id`; without it, definitions must match exactly. The identifier asserts a shared measurement contract, not merely matching names. Keep weighting and layer compatible. For unsupported sources, add a small adapter in tools, validate it on known examples, and record the resulting mapping and formula. Never use an unchecked generic `eval` transformation.
 
 Exclude control/management traffic from data-rate and data-retry estimates unless that population is the explicit target. Keep data/control populations separate. Missing capture observations are not proof of zero offered traffic or of radio loss.
 
@@ -105,9 +105,9 @@ python tools/plot_windows.py --windows logs/<run_id>/windows.json --output-dir r
 python tools/plot_windows.py --windows logs/<run_id>/windows.json --output-dir results/<run_id>/timelines --mode timeline
 ```
 
-The built-in timeline plots use separate source-relative axes, not automatic event alignment. Add a reviewed alignment adapter when external anchors exist. The comparison tool operates on declared independent pairs and conditions; it cannot verify independence from names.
+The built-in timeline plots use separate source-relative axes, not automatic event alignment. Add a reviewed alignment adapter when external anchors exist. The comparison tool operates on declared independent pairs and conditions; it cannot verify independence from names. Inspect its condition-level contrasts and unmatched cells before interpreting the pooled contrast. A matching metric name and unit alone do not establish compatible estimands.
 
-Use an explicit SLA threshold when supplied. Otherwise describe any learned baseline and keep detection exploratory. Use `tools/detect_events.py --help` for threshold excursions; select one run, metric and direction and supply duration/recovery policies. Analyze persistent underperformance, jitter and recovery failure as well as isolated dips. A truncated recording cannot establish permanent failure to recover.
+Use an explicit SLA threshold when supplied. Otherwise describe any learned baseline and keep detection exploratory. Use `tools/detect_events.py --help` for threshold excursions; select one run, metric and direction and supply duration/recovery policies. Analyze persistent underperformance, jitter and recovery failure as well as isolated dips. A truncated recording cannot establish permanent failure to recover. Use `recovery_status` to distinguish sustained recovery, observed relapse and censoring. The bundled detector requires fully observed windows for continuity; partial windows break event/recovery follow-up, even when a lower coverage threshold is acceptable for descriptive summaries.
 
 ## 7. Generate and test competing mechanisms
 
@@ -139,7 +139,7 @@ Use matched observational designs or independent interventions for effect estima
 
 ## 9. Validate, write the diagnosis and preserve reproducibility
 
-Create an evidence ledger from `assets/evidence_ledger.template.json` under logs. Separate observations, supported candidates, unresolved alternatives, refuted candidates and validated mechanisms. A validated mechanism requires a documented design, independent replication evidence and a reviewer assessment; software can check the records, not certify the assumptions.
+Create a version 2 evidence ledger from `assets/evidence_ledger.template.json` under logs. Link each finding to the phenomenon IDs it explains; keep phenomenon status `observed`. Hash both evidence files and final figures. Use structured locators; descriptive locators remain explicitly unverified. Render the design, replication and assessment behind any validated mechanism. For blocked analyses, use empty `phenomena` and `findings` lists and explain capability/missing-evidence limits without invented plots. Separate observations, supported candidates, unresolved alternatives, refuted candidates and validated mechanisms. A validated mechanism requires a documented design, independent replication evidence and a reviewer assessment; software can check the records, not certify the assumptions.
 
 Validate important findings using appropriate checks: alternate windows, complete versus partial captures, leave-one-independent-run-out comparisons, negative cases, competing explanations and independent experiments. Use held-out runs when variable selection or tuning used the discovery data. Group dependent windows/links by their actual experimental unit. Correct a declared family of multiple tests; one significant result among many exploratory scans is not confirmation.
 
@@ -155,7 +155,7 @@ Use figures that actually support the associated claim. Do not fill a report wit
 
 ```text
 python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --output results/<run_id>/diagnosis.md
-python tools/test_tools.py
+python -m unittest discover -s tools -p "test_*.py"
 ```
 
 Check source hashes before and after, evidence locators, computed values, all Markdown image links and a visual sample of the final plots. Record unavailable capabilities and unfinished analyses plainly. A result of insufficient evidence is valid when accompanied by what can be concluded and the next useful measurement.

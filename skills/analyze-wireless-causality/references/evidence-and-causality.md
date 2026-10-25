@@ -20,4 +20,4 @@ Use counterfactual or individual-event attribution only under an independently s
 
 Preserve failed hypotheses and sensitivity results. Select/tune on discovery runs and assess on held-out independent runs when available. For small samples, report descriptive contrasts and uncertainty limitations rather than creating false precision. A failed falsification attempt is not proof that identifying assumptions hold.
 
-The Markdown report generator checks evidence files, hashes, locators, figures and required validation records. A filled JSON field is an attestation, not automatic confirmation that an experiment was valid.
+The version 2 Markdown report generator checks evidence and figure hashes, image structure, supported locator existence, phenomenon links and required validation records. JSON pointers and physical line ranges are machine checked. A whole-file locator establishes only file scope; a descriptive locator remains unverified. Legacy ledgers need an explicit migration to the current template. Report output cannot replace its inputs or evidence artifacts. A filled JSON field is an attestation, not automatic confirmation that an experiment was valid.

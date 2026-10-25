@@ -23,7 +23,7 @@ There is no universal PER measurement window established by the sources used her
 - Sufficient valid trials per window and comparable coverage across entities.
 - Retention of short events without letting very small denominators dominate.
 
-Record the choice before examining vendor rankings. Use a small prespecified sensitivity set, e.g. coarser and finer grids around that primary choice; these are task parameters, not universal constants. Flag low-count windows. Independent-binomial intervals are inappropriate when attempt outcomes are materially dependent; use run/block-aware uncertainty with explicit assumptions.
+Record the choice before examining vendor rankings. Use a small prespecified sensitivity set, e.g. coarser and finer grids around that primary choice; these are task parameters, not universal constants. Flag low-count windows. Retain invalid-source-row lists and sample counts. An event-sum window with an unknown amount has an unknown total; complete capture does not repair a missing decoded value. A validated complete empty event population can have a zero count/rate, whereas an incomplete empty capture remains missing. Independent-binomial intervals are inappropriate when attempt outcomes are materially dependent; use run/block-aware uncertainty with explicit assumptions.
 
 Never compress missing time. Preserve discontinuities and measurement masks. Do not bridge long gaps by interpolation. Amount splitting across source interval boundaries assumes uniform accrual unless finer observations exist; make that assumption explicit or choose aligned/coarser bins.
 
