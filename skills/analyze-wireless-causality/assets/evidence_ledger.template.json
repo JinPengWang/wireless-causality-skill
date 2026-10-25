@@ -1,4 +1,6 @@
 {
+  "schema_version": 2,
+  "analysis_status": "partial",
   "question": "REPLACE_QUESTION",
   "scope": "REPLACE_SCOPE",
   "measurement_contract": "REPLACE_MEASUREMENT_DEFINITIONS",
@@ -12,13 +14,17 @@
         {
           "path": "REPLACE_ARTIFACT",
           "sha256": "REPLACE_HASH",
-          "locator": "REPLACE_ROW_OR_KEY"
+          "locator": {
+            "type": "json_pointer",
+            "pointer": "/REPLACE_WITH_EXISTING_KEY"
+          }
         }
       ],
       "figures": [
         {
           "path": "../../results/REPLACE_RUN/figure.png",
-          "caption": "REPLACE_AXES_UNITS_WEIGHTING_UNCERTAINTY_AND_INTERPRETATION"
+          "caption": "REPLACE_AXES_UNITS_WEIGHTING_UNCERTAINTY_AND_INTERPRETATION",
+          "sha256": "REPLACE_WITH_FIGURE_SHA256"
         }
       ],
       "limitations": "REPLACE_LIMITATIONS"
@@ -34,13 +40,17 @@
         {
           "path": "REPLACE_ARTIFACT",
           "sha256": "REPLACE_HASH",
-          "locator": "REPLACE_ROW_OR_KEY"
+          "locator": {
+            "type": "json_pointer",
+            "pointer": "/REPLACE_WITH_EXISTING_KEY"
+          }
         }
       ],
       "figures": [
         {
           "path": "../../results/REPLACE_RUN/figure.png",
-          "caption": "REPLACE_AXES_UNITS_WEIGHTING_UNCERTAINTY_AND_INTERPRETATION"
+          "caption": "REPLACE_AXES_UNITS_WEIGHTING_UNCERTAINTY_AND_INTERPRETATION",
+          "sha256": "REPLACE_WITH_FIGURE_SHA256"
         }
       ],
       "limitations": "REPLACE_LIMITATIONS",
@@ -49,7 +59,10 @@
       "mechanism": "REPLACE_MECHANISM",
       "support": "REPLACE_SUPPORT",
       "counterevidence": "REPLACE_COUNTEREVIDENCE",
-      "next_test": "REPLACE_DISCRIMINATING_TEST"
+      "next_test": "REPLACE_DISCRIMINATING_TEST",
+      "explains": [
+        "P1"
+      ]
     }
   ],
   "limitations": "REPLACE_GAPS_AND_SCOPE_LIMITS",

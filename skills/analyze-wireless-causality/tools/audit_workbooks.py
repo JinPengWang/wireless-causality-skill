@@ -3,22 +3,28 @@ import argparse
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
-from common import number, sha256, table_rows, write_json
+from common import number, sha256, table_rows, write_json, ensure_output_safe
 
 
-def audit(path, max_rows=None):
+def audit(path, max_rows=None, header_row=1, sheet=None):
+    if max_rows is not None and (type(max_rows) is not int or max_rows < 1):
+        raise ValueError("max_rows must be a positive integer")
+    if type(header_row) is not int or header_row < 1:
+        raise ValueError("header_row must be a positive integer")
     import openpyxl
     before = sha256(path)
     workbook = openpyxl.load_workbook(path, read_only=True, data_only=True)
-    sheets = [(ws.title, ws.max_row, ws.max_column) for ws in workbook]
+    sheets = [(ws.title, ws.max_row, ws.max_column) for ws in workbook if sheet is None or ws.title == sheet]
     workbook.close()
+    if not sheets:
+        raise ValueError('Selected sheet is absent')
     result = {'path':str(Path(path).resolve()), 'sha256':before, 'sheets':[],
-              'mode':'full' if max_rows is None else 'sample',
+              'mode':'full' if max_rows is None else 'sample', 'header_row':header_row,
               'formula_policy':'cached values only; formula caches may be absent or stale'}
     for sheet, declared_rows, declared_cols in sheets:
         profile, count, issue = {}, 0, None
         try:
-            for rowno, row in table_rows(path, sheet):
+            for rowno, row in table_rows(path, sheet, header_row):
                 if max_rows is not None and count >= max_rows:
                     break
                 count += 1
@@ -56,6 +62,8 @@ def main():
     p.add_argument('--input', nargs='+', required=True)
     p.add_argument('--output', required=True)
     p.add_argument('--max-rows', type=int)
+    p.add_argument('--header-row', type=int, default=1)
+    p.add_argument('--sheet')
     a=p.parse_args()
     if a.max_rows is not None and a.max_rows < 1:
         p.error('--max-rows must be positive')
@@ -65,11 +73,12 @@ def main():
         p.error('This audit reads .xlsx only')
     if any(Path(x).resolve() == Path(a.output).resolve() for x in a.input):
         p.error('Output cannot overwrite a source')
+    ensure_output_safe(a.output,a.input,'.json')
     results=[]
     for path in a.input:
-        r=audit(path,a.max_rows); results.append(r)
+        r=audit(path,a.max_rows,a.header_row,a.sheet); results.append(r)
         print(Path(path).name, [(s['sheet'],s['rows_scanned']) for s in r['sheets']], flush=True)
-    write_json(a.output, {'created_utc':datetime.now(timezone.utc).isoformat(),'workbooks':results})
+    write_json(a.output, {'created_utc':datetime.now(timezone.utc).isoformat(),'workbooks':results},a.input)
 
 if __name__ == '__main__':
     main()

@@ -131,7 +131,8 @@ class ToolsTests(unittest.TestCase):
         self.assertEqual(effective_rate_proxy(100,2,10),80)
     def windows(self,values):
         return [{'run_id':'r','entity':'A','direction':'forward','condition':'c','pair_id':'p','metric':'m','unit':'u',
-                 'start_s':i,'end_s':i+1,'value':v,'coverage':1,'source_rows':[i+2]} for i,v in enumerate(values)]
+                 'start_s':i,'end_s':i+1,'value':v,'coverage':1,'source_rows':[i+2],
+                 'kind':'interval_mean','definition':'Synthetic interval outcome averaged over observed time'} for i,v in enumerate(values)]
     def test_run_weighting_is_duration_weighted(self):
         w=self.windows([0,10]);w[1]['end_s']=4
         self.assertEqual(summarize(w)[0]['mean'],7.5)
@@ -155,10 +156,10 @@ class ToolsTests(unittest.TestCase):
         e=detect(self.windows([10,1,10,10]),5,'below',1,.8,2)[0]
         self.assertTrue(e['onset_observed']);self.assertEqual(e['recovery_start_s'],2)
     def test_evidence_hash_change_rejected(self):
-        path=self.root/'evidence.json';path.write_text('{}');fig=self.root/'fig.png';fig.write_bytes(b'image')
-        item={'id':'p','statement':'x','status':'observed','calculation':'x','evidence':[{'path':'evidence.json','sha256':sha256(path),'locator':'row 1'}],
-              'figures':[{'path':'fig.png','caption':'x'}],'limitations':'x'}
-        report={'question':'x','scope':'x','measurement_contract':'x','phenomena':[item],'findings':[],'limitations':'x','reproduce':'x'}
+        path=self.root/'evidence.json';path.write_text('{}');fig=self.root/'fig.svg';fig.write_text('<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"></svg>')
+        item={'id':'p','statement':'x','status':'observed','calculation':'x','evidence':[{'path':'evidence.json','sha256':sha256(path),'locator':{'type':'json_pointer','pointer':''}}],
+              'figures':[{'path':'fig.svg','sha256':sha256(fig),'caption':'x'}],'limitations':'x'}
+        report={'schema_version':2,'analysis_status':'completed','question':'x','scope':'x','measurement_contract':'x','phenomena':[item],'findings':[],'limitations':'x','reproduce':'x'}
         validate_evidence(report,self.root);path.write_text('{"changed":true}')
         with self.assertRaises(ValueError):validate_evidence(report,self.root)
 
