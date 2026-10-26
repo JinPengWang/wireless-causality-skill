@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "data": {
+    "path": "REPLACE_WINDOWS.json",
+    "sha256": "REPLACE_SHA256"
+  },
+  "pre_interval_s": [
+    null,
+    null
+  ],
+  "post_interval_s": [
+    null,
+    null
+  ],
+  "split_policy": "reject",
+  "events": [
+    {
+      "id": "E1",
+      "unit_id": "REPLACE_INDEPENDENT_UNIT",
+      "anchor_s": null,
+      "anchor_uncertainty_s": null,
+      "origin": "assumed",
+      "evidence": "REPLACE_ANCHOR_SOURCE_AND_JUSTIFICATION",
+      "recordings": {
+        "signal": "REPLACE_RECORDING_ID"
+      }
+    }
+  ],
+  "signals": [
+    {
+      "id": "signal",
+      "layer": "REPLACE_LAYER",
+      "metric": "REPLACE_METRIC",
+      "relative_clock_uncertainty_s": null
+    }
+  ]
+}

@@ -15,10 +15,14 @@ Use the task-selected Python interpreter. Core runtime dependencies are in tools
 | detect_events.py | one selected series and threshold policy | excursions, integrated deficit and onset/recovery censoring |
 | plot_windows.py | normalized windows and mode | direction/condition/metric-separated ECDF or separate-run traces |
 | wifi_frames.py | normalized JSON request | compressed BA decoding, observed retry chains or rate proxy |
-| write_report.py | evidence ledger and local artifacts | verified Markdown report with one or two figures per item |
-| test_tools.py / test_contracts.py | no private inputs | synthetic numerical, boundary, missingness and integrity checks |
+| causal_analysis.py | explicit variables, units, controls, design and normalized records | per-recording association/prediction or independent paired contrast; attempts, diagnostics, influence and test-family results |
+| event_analysis.py | normalized interval means plus mapped anchors/signals | cross-layer event summaries, timing bounds and censoring; no automatic clock fitting |
+| verify_claims.py | hashed artifacts, exact value locators, unit contracts and expressions | atomic numerical checks with explicit arithmetic/meaning boundaries |
+| evidence_model.py | v2/v3 ledger and artifacts | presentation-independent integrity, claim and completion checks |
+| write_report.py | validated ledger and optional presentation labels | JSON model or localized Markdown; no fixed figure count |
+| test_tools.py / test_contracts.py / test_investigation.py | no private inputs | synthetic numerical, boundary, missingness and integrity checks |
 
-Adapters for arbitrary free-text exports, cumulative counters, clock fitting, exact aggregate reconstruction, automatic BA matching, event-aligned overlays, advanced causal estimation and Tigramite execution are **not** silently supplied by these primitives. Implement the smallest missing adapter when required, or return an explicit unavailable capability. Do not imply the library is a fully automatic root-cause classifier.
+Adapters for arbitrary free-text exports, cumulative counters, clock fitting, exact aggregate reconstruction, automatic BA matching, event-aligned overlays, causal designs beyond the declared paired backend and Tigramite execution are **not** silently supplied by these primitives. Implement the smallest missing adapter when required, or return an explicit unavailable capability. Do not imply the library is a fully automatic root-cause classifier.
 
 ## Window mapping v1
 
@@ -46,15 +50,13 @@ Overlapping or unsorted interval rows are rejected. Split crossings are rejected
 
 `effective_rate_proxy`: operation, rate_mbps, failures, attempts. Inputs must already share the declared population/window and rate weighting. No PER is inferred from retry flags.
 
-## Report ledger
+## Investigation and delivery interfaces
 
-Store the ledger under logs/<run_id>. Use schema_version=2 and analysis_status=completed, partial or blocked. Migrate old ledgers explicitly: add these fields, figure hashes, structured locators and finding-to-phenomenon links. Blocked reports may have empty phenomena/findings and no figures; document why analysis cannot proceed. Completed reports require observed phenomena. Artifact paths are relative to the ledger directory. Every phenomenon/finding has an id, statement, evidence status, calculation/selection explanation, hashed evidence references with locators, one or two figures with explanatory captions, and limitations. Phenomena must use observed status. Findings add explains (existing phenomenon IDs), an ordinal priority and rationale, mechanism, support, counterevidence and next_test. Figures require SHA256 and a decodable PNG/JPEG/WebP or well-formed SVG, in addition to captions. Readability still requires visual review. Validated mechanisms additionally require validation design, replication, reviewer assessment and a hashed result artifact.
+See [causal-investigation.md](causal-investigation.md) for the normalized record schema, controls/independent units, the implemented method registry, exact randomized-pair scope, validation, fallback and multiplicity contracts. See [end-to-end-investigation.md](end-to-end-investigation.md) for path-layer capabilities and the configured event interface. These backends do not impose a universal grid or infer interventions from filenames.
 
-Supported locators are {"type":"json_pointer","pointer":"/rows/0/value"}, {"type":"line_range","start":2,"end":5}, {"type":"whole_file"}, or {"type":"description","text":"manual locator"}. JSON pointers resolve keys/list indices with ~0/~1 escaping; line ranges refer to physical text lines, not CSV records. Descriptions render as unverified and cannot alone locate a validated-mechanism result. A valid locator establishes existence, not claim correctness. The renderer includes validation design, replication and reviewer assessment.
+See [evidence-claims.md](evidence-claims.md) for atomic numeric claims, table/JSON locators, expression/unit rules, v3 assessment/provenance fields, legacy v2 support and separate report exporters. Evidence hashes, calculation checks and semantic/causal review have distinct meanings. Images are optional; if included they still require integrity and readability checks. New work uses ledger schema_version=3. Existing v2 reports remain readable with numerical verification explicitly not performed.
 
-The renderer verifies records and links, not causal truth. Validate figure readability separately. Use Markdown-safe artifact paths. Report generation does not upload any source data. All artifact writers reject collisions with declared inputs; JSON outputs and Markdown reports use atomic replacement. Plotting checks its manifest and image paths before writing. Keep each run in a separate directory.
-
-Run all regression cases with `python -m unittest discover -s tools -p "test_*.py"`. A platform-denied hardlink integration test is reported as skipped, not passed.
+Run all regression cases with `python -m unittest discover -s tools -p "test_*.py"`. A platform-denied hardlink integration test is reported as skipped, not passed. Keep runtime artifacts out of commits and do not claim a test ran merely because a planned check appears in a template.
 
 ## Extension acceptance
 
