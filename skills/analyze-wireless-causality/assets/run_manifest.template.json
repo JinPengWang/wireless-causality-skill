@@ -43,5 +43,17 @@
   "capabilities": {},
   "metadata_conflicts": [],
   "assumptions": [],
-  "report_language": "English"
+  "report_language": null,
+  "report_formats": [],
+  "investigation": {
+    "requested_scope": null,
+    "method_selection_rationale": null,
+    "competing_explanations": [],
+    "path_layers": [],
+    "independent_units": {},
+    "control_sets": {},
+    "validation_plan": [],
+    "multiplicity": null,
+    "numerical_claim_review": null
+  }
 }

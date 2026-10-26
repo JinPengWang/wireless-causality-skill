@@ -34,6 +34,6 @@ BA followed by RTS/CTS can help delimit an **exchange candidate**. It does not u
 
 ## Useful mechanism-specific views
 
-Use one or two targeted figures per finding: retry-chain tail versus outcome; PHY-mode transitions and response delay; observed transmission burden during a throughput deficit; validated aggregate-size distribution; BA acknowledgment coverage and missing evidence. State frame population, direction, censoring and source rows in captions.
+Choose targeted evidence without a fixed figure count; use figures, tables or text as appropriate: retry-chain tail versus outcome; PHY-mode transitions and response delay; observed transmission burden during a throughput deficit; validated aggregate-size distribution; BA acknowledgment coverage and missing evidence. State frame population, direction, censoring and source rows in captions.
 
 Sources: [1] https://radiotap.org/fields/A-MPDU%20status.html ; [2] https://www.wireshark.org/docs/dfref/w/wlan.html ; [3] https://inet.omnetpp.org/docs/showcases/wireless/blockack/doc/index.html

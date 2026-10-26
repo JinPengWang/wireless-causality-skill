@@ -16,7 +16,7 @@ def sha256(path):
     return h.hexdigest()
 
 
-def read_json(path):
+def parse_json(text):
     def pairs(items):
         result = {}
         for key, value in items:
@@ -26,9 +26,13 @@ def read_json(path):
         return result
     def invalid(value):
         raise ValueError('Non-finite JSON constant: ' + value)
-    return json.loads(Path(path).read_text(encoding='utf-8-sig'),
+    return json.loads(text,
                       object_pairs_hook=pairs, parse_constant=invalid,
                       parse_float=lambda value: finite_number(value, 'JSON number'))
+
+
+def read_json(path):
+    return parse_json(Path(path).read_text(encoding='utf-8-sig'))
 
 
 def ensure_output_safe(path, inputs=(), suffix=None):

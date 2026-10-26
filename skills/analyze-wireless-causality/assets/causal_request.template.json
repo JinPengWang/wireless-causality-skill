@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "question": "REPLACE_QUESTION",
+  "scope": "REPLACE_POPULATION_AND_LIMITS",
+  "data": {
+    "path": "REPLACE_NORMALIZED_DATA.json",
+    "sha256": "REPLACE_SHA256"
+  },
+  "independent_unit_definition": "REPLACE_DESIGN_UNIT_OR_EXPLAIN_UNKNOWN",
+  "observation_weighting": "equal_rows_within_recording",
+  "relative_clock_uncertainty_s": null,
+  "variables": {
+    "outcome": {
+      "meaning": "REPLACE_SEMANTIC_DEFINITION",
+      "unit": "REPLACE_UNIT",
+      "time_scale": "REPLACE_TIME_SCALE",
+      "role": "measurement",
+      "derived_from": []
+    },
+    "factor": {
+      "meaning": "REPLACE_SEMANTIC_DEFINITION",
+      "unit": "REPLACE_UNIT",
+      "time_scale": "REPLACE_TIME_SCALE",
+      "role": "measurement",
+      "derived_from": []
+    }
+  },
+  "analyses": [
+    {
+      "id": "A1",
+      "method": "REPLACE_METHOD",
+      "mode": "plan",
+      "outcome": "outcome",
+      "exposure": "factor",
+      "controls": [],
+      "control_rationale": {},
+      "assumptions": [
+        "REPLACE_ASSUMPTIONS_AND_SCOPE"
+      ]
+    }
+  ],
+  "multiplicity": {
+    "method": "none",
+    "rationale": "REPLACE_PREDECLARED_TESTING_POLICY",
+    "families": {}
+  }
+}

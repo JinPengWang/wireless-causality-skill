@@ -1,12 +1,12 @@
 ---
 name: analyze-wireless-causality
 description: >-
-  Investigate wireless performance across protocols, vendors, capture formats and telemetry sources. Use for throughput dips, jitter, slow recovery, unexplained device differences, exploratory anomaly discovery and evidence-based root-cause analysis. Adapt packet captures, application measurements or interval telemetry through explicit measurement contracts; compare matched runs, test competing mechanisms, produce readable figures and a Markdown diagnosis, and distinguish observed associations from validated causes.
+  Investigate wireless performance and end-to-end bottlenecks across protocols, vendors, capture formats and telemetry sources. Use for throughput dips, jitter, slow recovery, unexplained device differences, exploratory anomaly discovery and evidence-based root-cause analysis. Adapt packet captures, application measurements or interval telemetry through explicit measurement contracts; compare matched runs, test competing mechanisms, produce readable evidence and requested diagnostic outputs, and distinguish observed associations from validated causes.
 ---
 
 # Wireless Performance Investigation
 
-Turn an expert question, or an open-ended request to find problems, into a reproducible investigation. Use deterministic tools for calculations and domain reasoning for interpretation. Maintain competing explanations and seek evidence that could disprove the leading explanation.
+Turn an expert question, or an open-ended request to find problems, into a reproducible investigation. Use deterministic tools for calculations and domain reasoning for interpretation. Maintain competing explanations and seek evidence that could disprove the leading explanation. Let the current request determine the research focus; never presume a superior device, an anomaly, a root cause or a preferred algorithm. Apply consistent statistical rules across comparisons.
 
 ## 1. Separate reusable knowledge from each investigation
 
@@ -28,7 +28,7 @@ Create `logs/<run_id>/` and `results/<run_id>/` beneath this SKILL.md directory.
 
 - Put all analysis Python scripts in `tools/`. Keep reusable tools at its top level and run-specific adapters/reproduction scripts under `tools/runs/<run_id>/`; keep their settings in the run configuration.
 - Put the resolved request, mappings, input hashes, environment, intermediate tables, sample masks, source-row references and evidence ledger in `logs/<run_id>/`.
-- Put final PNG/SVG figures and `diagnosis.md` in `results/<run_id>/`.
+- Put selected figures, structured analysis results and requested reports in `results/<run_id>/`. Resolve language and export formats from the current request; record any format that still needs an exporter.
 - Keep raw/private measurements, logs and results out of source-control commits by default. Commit only reusable skill changes unless the user requests data publication.
 
 Example invocation patterns, with task-provided values:
@@ -111,6 +111,8 @@ Use an explicit SLA threshold when supplied. Otherwise describe any learned base
 
 ## 7. Generate and test competing mechanisms
 
+Read [references/end-to-end-investigation.md](references/end-to-end-investigation.md). Map offered load, wireless, wired path, transport, sender/receiver endpoints and measurement artifacts in one investigation. An unmeasured layer is unknown, not healthy. Use available signals to distinguish explanations without requiring every sensor.
+
 Use [references/evidence-and-causality.md](references/evidence-and-causality.md). Start with mechanisms applicable to the observed layer and available measurements, such as:
 
 - Propagation or external interference; contention and coexistence.
@@ -119,7 +121,7 @@ Use [references/evidence-and-causality.md](references/evidence-and-causality.md)
 - Power saving, roaming, implementation/firmware differences.
 - Capture, decoding, clock or aggregation artifacts.
 
-For each candidate, state its prediction, temporal ordering, expected affected outcomes, negative controls, observable counterexamples and distinguishing follow-up. Trace a proposed mechanism to the measured symptom. A vendor difference or an extreme parameter is not sufficient by itself.
+For every candidate, name the phenomena it explains, its falsifiable prediction, strongest alternative explanation, existing counterevidence and next distinguishing check. Add temporal ordering, negative controls and expected affected outcomes where observable. Trace a proposed mechanism to the measured symptom. A vendor difference or an extreme parameter is not sufficient by itself.
 
 Inspect response magnitude, delay, convergence, hysteresis and recovery where phase timing and sampling permit. Compare before/during/after only when those phases are defensible. Retain unmatched context as descriptive evidence rather than presenting it as a counterfactual.
 
@@ -127,38 +129,62 @@ For retry behavior, examine the tail of observed attempt-chain lengths, duration
 
 Use `tools/wifi_frames.py` only on reviewed normalized frame data. It provides compressed Block Ack decoding, censored observed retry chains and a rate-proxy calculation. It does not reconstruct exact aggregates, match arbitrary acknowledgments or estimate true PER from incomplete captures.
 
+Use `tools/event_analysis.py` with `assets/event_request.template.json` for configured cross-layer event summaries. Record anchor origin, source-to-event mapping, independent units and clock uncertainty; preserve gaps and censoring. Unknown clock error cannot become a real response delay. The default excludes interval means straddling phase boundaries; uniform sub-window allocation needs an explicit assumption. Do not reuse outcome-selected events as independent intervention evidence.
+
 Rank investigation priorities using evidence quality, plausible impact, repeatability across independent runs, temporal/mechanistic consistency, counterevidence and actionability. State the rationale for each ordinal priority. Do not create uncalibrated cause probabilities or sum overlapping attributed effects.
 
-## 8. Escalate causal methods only when justified
+## 8. Select and execute an appropriate investigation backend
 
-Read [references/tigramite-backend.md](references/tigramite-backend.md) when conditional time-series discovery would resolve a specific competing explanation. Tigramite is an optional backend specification, not a bundled or already executed dependency.
+Read [references/causal-investigation.md](references/causal-investigation.md). Choose descriptive comparison, event analysis, association, time-series exploration or effect estimation from the question and data. Do not force a single model, library, time grid or experimental design.
 
-Require a regular analysis grid, adequate usable samples, declared missingness rules, plausible mechanism stability, meaningful variable types and explicit assumptions about hidden common causes. Preserve uncertain graph directions. Learn from an appropriate background population, not only selected bad events. An accepted statistical diagnostic does not prove causal assumptions.
-
-Use matched observational designs or independent interventions for effect estimation where identifiable. Define the intervention, outcome, time horizon, adjustment logic and estimand separately from discovery. Preserve `not_identified` when evidence is insufficient. Never treat a discovery edge, p-value, predictive importance or ranking as proof of the root cause of an individual event.
-
-## 9. Validate, write the diagnosis and preserve reproducibility
-
-Create a version 2 evidence ledger from `assets/evidence_ledger.template.json` under logs. Link each finding to the phenomenon IDs it explains; keep phenomenon status `observed`. Hash both evidence files and final figures. Use structured locators; descriptive locators remain explicitly unverified. Render the design, replication and assessment behind any validated mechanism. For blocked analyses, use empty `phenomena` and `findings` lists and explain capability/missing-evidence limits without invented plots. Separate observations, supported candidates, unresolved alternatives, refuted candidates and validated mechanisms. A validated mechanism requires a documented design, independent replication evidence and a reviewer assessment; software can check the records, not certify the assumptions.
-
-Validate important findings using appropriate checks: alternate windows, complete versus partial captures, leave-one-independent-run-out comparisons, negative cases, competing explanations and independent experiments. Use held-out runs when variable selection or tuning used the discovery data. Group dependent windows/links by their actual experimental unit. Correct a declared family of multiple tests; one significant result among many exploratory scans is not confirmation.
-
-Write the Markdown diagnosis in the requested language, in this order:
-
-1. Scope, source limitations and the measurement contract.
-2. Phenomenon comparison and what is abnormal.
-3. Prioritized mechanisms/candidates, with one or two readable figures each.
-4. For each figure, explain population, axes, units, window, numerator/denominator, weighting, selection and uncertainty.
-5. Counterevidence, missing evidence, next discriminating tests and reproduction instructions.
-
-Use figures that actually support the associated claim. Do not fill a report with all generated plots. Keep effect sizes separate from statistical significance and practical importance.
+For the bundled supported methods, resolve `assets/causal_request.template.json` and normalized data using `assets/causal_data.template.json`. Declare variable meanings, units/time scales, controls and their rationale, independent experimental units, effective sample masks, assumptions and scope. Keep deterministic derivations out of purported new causal relationships. Do not treat repeated windows or repeated events as independent experiments.
 
 ```text
-python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --output results/<run_id>/diagnosis.md
-python -m unittest discover -s tools -p "test_*.py"
+python tools/causal_analysis.py --request logs/<run_id>/causal_request.json --output logs/<run_id>/causal_results.json
 ```
 
-Check source hashes before and after, evidence locators, computed values, all Markdown image links and a visual sample of the final plots. Record unavailable capabilities and unfinished analyses plainly. A result of insufficient evidence is valid when accompanied by what can be concluded and the next useful measurement.
+The implemented methods are per-recording adjusted linear association, lagged incremental prediction with temporal and independent-unit holdouts, and independent paired contrasts with an optional explicitly declared randomized paired design. They preserve recording-level diagnostics, exclusions, influence/heterogeneity, attempted methods and failures. These are scoped choices, not mandatory defaults or automatic root-cause classifiers. Use another validated backend when the design or variable types require it.
+
+Keep association, incremental prediction, mechanism candidates and identifiable intervention effects distinct. Effect interpretation requires an estimand and a defensible identification design; software checks do not certify assumptions. A discovery edge, p-value, predictive gain or investigation ranking is not proof of an individual event's root cause.
+
+Predeclare appropriate validation: held-out independent units when selection/tuning occurred, negative cases, influence, heterogeneity, model diagnostics, timing/window sensitivity, design-specific falsification and multiple-testing families. Preserve failures, counterexamples, null results and unstable conclusions. Do not adjust away mediators or silently substitute a different estimand.
+
+Advanced methods unavailable or unsuitable: record `unsupported` separately from `planned`, `failed`, `partial` and `executed`. Use an explicitly configured, appropriate validated fallback, preserving the original attempt. Read [references/tigramite-backend.md](references/tigramite-backend.md) only when its optional discovery methods could resolve a stated uncertainty; it remains an integration specification, not an implemented dependency here.
+
+When causal effects are not identifiable, retain `not_identified` for that question while completing supported relationship exploration, mechanism predictions, counterevidence and discriminating checks. A generic disclaimer cannot substitute for those analyses.
+
+## 9. Check claims and deliver a reproducible answer
+
+Read [references/evidence-claims.md](references/evidence-claims.md). Create a version 3 ledger from `assets/evidence_ledger.template.json`; old v2 ledgers remain readable without pretending they received the new checks.
+
+For each numerical claim, record an atomic statement, exact data location, field, unit, measurement basis, calculation and justified tolerance in `assets/numeric_claims.template.json` or the ledger's embedded bundle. Split compound claims into separately supported components. Keep source-row mappings for derived results. Use the checker to recompute supported formulas:
+
+```text
+python tools/verify_claims.py --request logs/<run_id>/numeric_claims.json --output logs/<run_id>/claim_checks.json
+```
+
+Distinguish file integrity, locator existence, numerical agreement and substantive semantic/causal review. Hashes and successful arithmetic do not prove that the claim's wording, population or causal interpretation is correct. Review unregistered numbers in prose, tables and figure annotations; mark manual/unfinished checks accordingly.
+
+Link findings to observed phenomena. For every mechanism candidate include its prediction, strongest alternative, existing counterevidence and next discriminating check. A validated mechanism or scoped intervention effect needs explicit design, replication, reviewer assessment and a located result. Preserve unresolved and refuted candidates as appropriate.
+
+Use text, tables, structured results and readable figures according to what supports the answer; do not impose a fixed figure count. For figures, explain population, axes, units, window, weighting, selection and uncertainty. Validate readability separately from file integrity.
+
+Keep analysis results separate from presentation. Choose language and export formats from the task. The stock renderer exports structured JSON or localized Markdown; use a separate validated exporter for other formats:
+
+```text
+python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --format json --output results/<run_id>/analysis.json
+python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --format markdown --output results/<run_id>/diagnosis.md
+```
+
+Organize the answer around scope and measurement limits, observed phenomena/comparisons, prioritized explanations, counterevidence and discriminating next checks. Report normal behavior or insufficient discrimination when that is the result. Keep effect magnitude, statistical evidence and practical importance separate.
+
+Record execution completion, data capability, question-answer completeness and delivery quality as separate assessments with reasons. A finished program is not a fully answered question. Record actual versions, configuration, dependencies, sources, hashes and executed commands; distinguish plans from execution. Unfinished checks cannot be marked passed. Protect evidence/source files against output replacement and preserve previous runs.
+
+For reusable changes, run meaningful numerical, design-boundary and integrity regressions, and test the end-to-end workflow on a different synthetic task:
+
+```text
+python -m unittest discover -s tools -p "test_*.py"
+```
 
 ## Extension rule
 

@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 3,
   "analysis_status": "partial",
   "question": "REPLACE_QUESTION",
   "scope": "REPLACE_SCOPE",
@@ -17,17 +17,15 @@
           "locator": {
             "type": "json_pointer",
             "pointer": "/REPLACE_WITH_EXISTING_KEY"
-          }
+          },
+          "supports": "REPLACE_EXACT_SUPPORTED_COMPONENT"
         }
       ],
-      "figures": [
-        {
-          "path": "../../results/REPLACE_RUN/figure.png",
-          "caption": "REPLACE_AXES_UNITS_WEIGHTING_UNCERTAINTY_AND_INTERPRETATION",
-          "sha256": "REPLACE_WITH_FIGURE_SHA256"
-        }
-      ],
-      "limitations": "REPLACE_LIMITATIONS"
+      "figures": [],
+      "limitations": "REPLACE_LIMITATIONS",
+      "claim_ids": [
+        "C1"
+      ]
     }
   ],
   "findings": [
@@ -43,16 +41,11 @@
           "locator": {
             "type": "json_pointer",
             "pointer": "/REPLACE_WITH_EXISTING_KEY"
-          }
+          },
+          "supports": "REPLACE_EXACT_SUPPORTED_COMPONENT"
         }
       ],
-      "figures": [
-        {
-          "path": "../../results/REPLACE_RUN/figure.png",
-          "caption": "REPLACE_AXES_UNITS_WEIGHTING_UNCERTAINTY_AND_INTERPRETATION",
-          "sha256": "REPLACE_WITH_FIGURE_SHA256"
-        }
-      ],
+      "figures": [],
       "limitations": "REPLACE_LIMITATIONS",
       "priority": 1,
       "priority_reason": "REPLACE_EVIDENCE_IMPACT_REPLICATION_AND_COUNTEREVIDENCE",
@@ -62,9 +55,111 @@
       "next_test": "REPLACE_DISCRIMINATING_TEST",
       "explains": [
         "P1"
-      ]
+      ],
+      "claim_ids": [],
+      "claim_type": "mechanism_candidate",
+      "prediction": "REPLACE_EXPECTED_OBSERVATION",
+      "strongest_alternative": "REPLACE_STRONGEST_ALTERNATIVE"
     }
   ],
   "limitations": "REPLACE_GAPS_AND_SCOPE_LIMITS",
-  "reproduce": "REPLACE_ENVIRONMENT_VERSIONS_COMMANDS_SEED_AND_INPUT_HASHES"
+  "reproduce": "REPLACE_ENVIRONMENT_VERSIONS_COMMANDS_SEED_AND_INPUT_HASHES",
+  "language": "REPLACE_LANGUAGE",
+  "title": "REPLACE_TITLE",
+  "numeric_claims": {
+    "schema_version": 1,
+    "artifacts": {
+      "source": {
+        "path": "REPLACE_EVIDENCE.json",
+        "sha256": "REPLACE_SHA256"
+      }
+    },
+    "units": {},
+    "claims": [
+      {
+        "id": "C1",
+        "statement": "REPLACE_ATOMIC_NUMERICAL_STATEMENT",
+        "operands": {
+          "value": {
+            "artifact": "source",
+            "locator": {
+              "type": "json_pointer",
+              "pointer": "/REPLACE_FIELD"
+            },
+            "unit": "REPLACE_UNIT",
+            "unit_basis": "REPLACE_MEASUREMENT_CONTRACT"
+          }
+        },
+        "expression": "value",
+        "value": null,
+        "unit": "REPLACE_UNIT",
+        "tolerance": {
+          "absolute": null,
+          "relative": null
+        }
+      }
+    ]
+  },
+  "assessment": {
+    "execution": {
+      "status": "partial",
+      "reason": "REPLACE_EXECUTED_PLANNED_UNSUPPORTED_AND_FAILED_STEPS"
+    },
+    "data_capability": {
+      "status": "limited",
+      "reason": "REPLACE_AVAILABLE_AND_MISSING_CAPABILITIES"
+    },
+    "question_answer": {
+      "status": "unanswered",
+      "reason": "REPLACE_WHICH_QUESTION_PARTS_ARE_SUPPORTED"
+    },
+    "delivery_quality": {
+      "status": "not_checked",
+      "reason": "REPLACE_DELIVERY_REQUIREMENTS",
+      "checks": [
+        {
+          "id": "claim_mapping",
+          "status": "not_checked",
+          "reason": "REPLACE_ACTUAL_CHECK_RESULT"
+        }
+      ]
+    }
+  },
+  "claim_review": {
+    "status": "not_checked",
+    "reviewer": null,
+    "note": "REPLACE_SEMANTIC_AND_COMPLETENESS_REVIEW",
+    "unmapped_statements": []
+  },
+  "provenance": {
+    "skill_revision": "REPLACE_COMMIT_OR_WORKING_TREE_HASH",
+    "runtime": {
+      "executable": "REPLACE_EXECUTABLE",
+      "python": "REPLACE_VERSION",
+      "packages": {}
+    },
+    "commands": [
+      [
+        "REPLACE_ACTUAL_EXECUTABLE",
+        "REPLACE_ACTUAL_ARGUMENTS"
+      ]
+    ],
+    "artifacts": [
+      {
+        "role": "source",
+        "path": "REPLACE_SOURCE_PATH",
+        "sha256": "REPLACE_SHA256"
+      },
+      {
+        "role": "configuration",
+        "path": "REPLACE_CONFIGURATION_PATH",
+        "sha256": "REPLACE_SHA256"
+      },
+      {
+        "role": "tool",
+        "path": "REPLACE_TOOL_PATH",
+        "sha256": "REPLACE_SHA256"
+      }
+    ]
+  }
 }
