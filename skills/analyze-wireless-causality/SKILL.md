@@ -169,14 +169,20 @@ Link findings to observed phenomena. For every mechanism candidate include its p
 
 Use text, tables, structured results and readable figures according to what supports the answer; do not impose a fixed figure count. For figures, explain population, axes, units, window, weighting, selection and uncertainty. Validate readability separately from file integrity.
 
-Keep analysis results separate from presentation. Choose language and export formats from the task. The stock renderer exports structured JSON or localized Markdown; use a separate validated exporter for other formats:
+Read [references/report-design.md](references/report-design.md) before composing the report. Keep analysis results separate from presentation. Choose language and export formats from the task; when unspecified, retain JSON and provide editable Markdown plus an offline HTML reading edition. Resolve `assets/report/presentation.template.json` with explicitly selected summary IDs, short item titles and optional claim-backed tables. Use the shared report theme for bundled and run-specific plots. Do not place raw markup or large audit records inside prose fields.
 
 ```text
 python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --format json --output results/<run_id>/analysis.json
-python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --format markdown --output results/<run_id>/diagnosis.md
+python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --presentation logs/<run_id>/presentation.json --format markdown --output results/<run_id>/diagnosis.md
+python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --presentation logs/<run_id>/presentation.json --format html --output results/<run_id>/diagnosis.html
+python tools/check_report_layout.py --html results/<run_id>/diagnosis.html --output logs/<run_id>/layout_checks.json --preview-dir results/<run_id>/previews
 ```
 
 Organize the answer around scope and measurement limits, observed phenomena/comparisons, prioritized explanations, counterevidence and discriminating next checks. Report normal behavior or insufficient discrimination when that is the result. Keep effect magnitude, statistical evidence and practical importance separate.
+
+Use a short executive summary, readable analysis body and linked audit appendix. Keep important limitations, failed/null results and counterevidence in the body. Move repeated numerical checks, exact locators, hashes and execution metadata to the appendix. Number figures/tables consistently; keep table values tied to verified claims and declared units. Split dense plots and wide tables without omitting comparison objects. Do not impose fixed page, word or figure counts.
+
+Inspect the actual rendering at desktop and narrow widths, and review charts at their final display size. For requested PDF, use the layout tool's optional `--pdf` with an existing compatible Chromium browser and inspect pagination separately. Automatic structural checks, first-viewport screenshots, PDF creation and manual visual review are distinct results. Record the reviewed artifact hashes and scope; a missing browser or an unfinished visual check cannot be reported as a passed layout. Other requested formats require separate validated exporters.
 
 Record execution completion, data capability, question-answer completeness and delivery quality as separate assessments with reasons. A finished program is not a fully answered question. Record actual versions, configuration, dependencies, sources, hashes and executed commands; distinguish plans from execution. Unfinished checks cannot be marked passed. Protect evidence/source files against output replacement and preserve previous runs.
 

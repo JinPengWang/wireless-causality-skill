@@ -13,14 +13,15 @@ Use the task-selected Python interpreter. Core runtime dependencies are in tools
 | build_windows.py | versioned JSON mapping | normalized windows with metadata, coverage and source rows |
 | compare_runs.py | normalized window JSON; optional reference | duration-weighted or pooled-count per-run summaries and equal-pair contrasts |
 | detect_events.py | one selected series and threshold policy | excursions, integrated deficit and onset/recovery censoring |
-| plot_windows.py | normalized windows and mode | direction/condition/metric-separated ECDF or separate-run traces |
+| plot_windows.py | normalized windows, mode, optional shared theme/language labels | direction/condition/metric-separated ECDF or separate-run traces; dense-series panels retain every eligible entity |
 | wifi_frames.py | normalized JSON request | compressed BA decoding, observed retry chains or rate proxy |
 | causal_analysis.py | explicit variables, units, controls, design and normalized records | per-recording association/prediction or independent paired contrast; attempts, diagnostics, influence and test-family results |
 | event_analysis.py | normalized interval means plus mapped anchors/signals | cross-layer event summaries, timing bounds and censoring; no automatic clock fitting |
 | verify_claims.py | hashed artifacts, exact value locators, unit contracts and expressions | atomic numerical checks with explicit arithmetic/meaning boundaries |
 | evidence_model.py | v2/v3 ledger and artifacts | presentation-independent integrity, claim and completion checks |
-| write_report.py | validated ledger and optional presentation labels | JSON model or localized Markdown; no fixed figure count |
-| test_tools.py / test_contracts.py / test_investigation.py | no private inputs | synthetic numerical, boundary, missingness and integrity checks |
+| write_report.py | validated ledger, optional presentation/table configuration and shared theme | JSON model or localized Markdown/offline HTML with summary, body and audit appendix; no fixed figure count |
+| check_report_layout.py | generated HTML, fresh check output, optional existing browser/previews/PDF | static/DOM layout checks and optional PDF export; actual visual review remains separately recorded |
+| test_tools.py / test_contracts.py / test_investigation.py / test_report_design.py | no private inputs | synthetic numerical, design-boundary, evidence, presentation and integrity checks |
 
 Adapters for arbitrary free-text exports, cumulative counters, clock fitting, exact aggregate reconstruction, automatic BA matching, event-aligned overlays, causal designs beyond the declared paired backend and Tigramite execution are **not** silently supplied by these primitives. Implement the smallest missing adapter when required, or return an explicit unavailable capability. Do not imply the library is a fully automatic root-cause classifier.
 
@@ -55,6 +56,8 @@ Overlapping or unsorted interval rows are rejected. Split crossings are rejected
 See [causal-investigation.md](causal-investigation.md) for the normalized record schema, controls/independent units, the implemented method registry, exact randomized-pair scope, validation, fallback and multiplicity contracts. See [end-to-end-investigation.md](end-to-end-investigation.md) for path-layer capabilities and the configured event interface. These backends do not impose a universal grid or infer interventions from filenames.
 
 See [evidence-claims.md](evidence-claims.md) for atomic numeric claims, table/JSON locators, expression/unit rules, v3 assessment/provenance fields, legacy v2 support and separate report exporters. Evidence hashes, calculation checks and semantic/causal review have distinct meanings. Images are optional; if included they still require integrity and readability checks. New work uses ledger schema_version=3. Existing v2 reports remain readable with numerical verification explicitly not performed.
+
+See [report-design.md](report-design.md) for presentation schema v1, shared theme/plot rules, source protection, table splitting/rounding and the browser/manual layout-review boundary. Browser rendering is optional and uses an existing Chromium executable plus optional websocket-client; the exporter does not install a browser or weaken its sandbox. Preserve analysis/evidence content across presentation changes.
 
 Run all regression cases with `python -m unittest discover -s tools -p "test_*.py"`. A platform-denied hardlink integration test is reported as skipped, not passed. Keep runtime artifacts out of commits and do not claim a test ran merely because a planned check appears in a template.
 
