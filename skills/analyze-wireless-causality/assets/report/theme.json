@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "text_color": "#243247",
+  "heading_color": "#14385b",
+  "accent_color": "#096b72",
+  "muted_color": "#536477",
+  "rule_color": "#d5dfe8",
+  "background_color": "#ffffff",
+  "soft_color": "#f2f6fa",
+  "font_families": ["Segoe UI", "Microsoft YaHei", "Noto Sans CJK SC", "Arial", "sans-serif"],
+  "body_px": 16,
+  "line_height": 1.65,
+  "content_width_px": 840,
+  "print_body_pt": 11,
+  "print_margin_mm": 22,
+  "table_columns": 6,
+  "plot_font_pt": 12,
+  "plot_width_in": 8,
+  "plot_series_per_panel": 6,
+  "plot_rows_per_page": 3,
+  "series_colors": ["#2166ac", "#b35806", "#008577", "#804b9a", "#be4668", "#627a21"]
+}

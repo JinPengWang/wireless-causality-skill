@@ -62,13 +62,16 @@ Legacy v2 ledgers remain readable. They do not receive v3 numerical or assessmen
 
 ## Separate analysis from presentation
 
-`evidence_model.py` validates the ledger independently of rendering. `write_report.py` exports either a presentation-independent JSON model (ledger plus verification results) or Markdown:
+`evidence_model.py` validates the ledger independently of rendering. `write_report.py` exports a presentation-independent JSON model (ledger plus verification results), Markdown or offline HTML. The reader editions share one semantic rendering path, with a summary/body and linked audit appendix:
 
 ```text
 python tools/write_report.py --ledger logs/<run>/evidence_ledger.json --format json --output results/<run>/analysis.json
 python tools/write_report.py --ledger logs/<run>/evidence_ledger.json --format markdown --output results/<run>/diagnosis.md
+python tools/write_report.py --ledger logs/<run>/evidence_ledger.json --presentation logs/<run>/presentation.json --format html --output results/<run>/diagnosis.html
 ```
 
-Markdown has English and Chinese labels. Other languages can supply `--presentation labels.json` with matching `language` and a complete `labels` mapping; exact keys are in `EN` in the renderer. Statement content must itself be authored in the requested language. JSON export does not impose a presentation language. Add separate exporters for requested HTML/PDF/documents, and validate those actual deliverables; do not rename a Markdown file or mark an unimplemented export as completed.
+Reader editions have English and Chinese labels. Other languages supply `--presentation labels.json` with matching `language` and a complete `labels` mapping; exact keys are in `report_labels.EN` (also re-exported by `write_report.py`). Statement content must itself be authored in the requested language. JSON export does not impose a presentation language. See [report-design.md](report-design.md) for summary selection, claim-backed numeric tables, theme overrides, offline HTML, optional Chromium PDF export and actual visual-review requirements. Other document formats require separate exporters. Do not rename a file or mark an unimplemented/unreviewed export as complete.
+
+Renderers retain exact claim values, formulas, units and locators in a complete audit JSON sidecar, linked from compact appendix entries; the JSON analysis export also retains complete source vectors. Reader prose does not repeat long arrays. Matching Markdown/HTML editions share the same sidecar, and differing existing audit records are protected from replacement. Presentation tables round only the displayed value and link back to the original claim. Material limitations/counterevidence remain in the body. HTML includes a protected-artifact manifest so layout outputs cannot replace source/claim/provenance files. Layout review does not certify numerical or scientific meaning, and a recorded ledger assessment does not automatically certify a newly rendered artifact.
 
 All referenced artifacts are protected against output collisions. Keep source hashes, adapter code, configuration, model versions, commands and limitations with the run. Finishing the renderer does not mean the scientific question, requested checks or requested export formats have all been satisfied.
