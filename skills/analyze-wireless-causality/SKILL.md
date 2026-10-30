@@ -59,6 +59,8 @@ A filename parser is a configurable metadata hint. Validate its output against c
 
 Run the streaming workbook audit. Inspect useful examples and missingness rather than dumping millions of rows into context. A sampled audit must be labelled sampled; it cannot establish whole-file absence or coverage. Inspect formulas/cached-value limitations when applicable.
 
+Check audit execution status separately from `mode` (`full` or `sample`). A sheet read error retains its `issue` and any scanned profile, marks the audit partial/failed, and makes the CLI return nonzero. Do not use an incomplete audit as a passed input check. An intentional `max_rows` sample can complete its requested scope without completing a full-sheet scan.
+
 ## 4. Determine what the data can support
 
 Build a capability table with `available`, `conditional` or `unavailable`, the prerequisites and the exact missing evidence. Continue useful lower-level analyses when an advanced method is unavailable.
@@ -131,6 +133,8 @@ Use `tools/wifi_frames.py` only on reviewed normalized frame data. It provides c
 
 Use `tools/event_analysis.py` with `assets/event_request.template.json` for configured cross-layer event summaries. Record anchor origin, source-to-event mapping, independent units and clock uncertainty; preserve gaps and censoring. Unknown clock error cannot become a real response delay. The default excludes interval means straddling phase boundaries; uniform sub-window allocation needs an explicit assumption. Do not reuse outcome-selected events as independent intervention evidence.
 
+Threshold responses classify observed bins, not physical onset. Inspect `response.followup` and the complete `gaps` list across the anchor-to-follow-up-end interval. No usable follow-up is `not_assessable`; partial follow-up cannot support a complete negative observation. `right_censored` describes a missing follow-up tail and does not invalidate a separately observed onset. Phase `split_policy` applies to pre/post means, not to the threshold-bin classification.
+
 Rank investigation priorities using evidence quality, plausible impact, repeatability across independent runs, temporal/mechanistic consistency, counterevidence and actionability. State the rationale for each ordinal priority. Do not create uncalibrated cause probabilities or sum overlapping attributed effects.
 
 ## 8. Select and execute an appropriate investigation backend
@@ -177,6 +181,8 @@ python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --prese
 python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --presentation logs/<run_id>/presentation.json --format html --output results/<run_id>/diagnosis.html
 python tools/check_report_layout.py --html results/<run_id>/diagnosis.html --output logs/<run_id>/layout_checks.json --preview-dir results/<run_id>/previews
 ```
+
+Before a report becomes a retained deliverable, freeze its ledger, referenced artifacts and renderer sources into a new directory with `tools/snapshot_report.py --ledger logs/<run_id>/evidence_ledger.json --output-dir results/<run_id>/frozen`. Use the packaged `skill/tools/write_report.py` and `ledger.json` for subsequent exports. The snapshot preserves expected hashes and historical assessments; it does not certify a new export's layout. If a historical tool changed, supply an exact matching archived `--source-root`; never refresh an old expected hash to make validation pass. See [references/report-design.md](references/report-design.md).
 
 Organize the answer around scope and measurement limits, observed phenomena/comparisons, prioritized explanations, counterevidence and discriminating next checks. Report normal behavior or insufficient discrimination when that is the result. Keep effect magnitude, statistical evidence and practical importance separate.
 
