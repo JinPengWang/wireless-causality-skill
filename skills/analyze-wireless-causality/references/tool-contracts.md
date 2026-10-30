@@ -19,11 +19,14 @@ Use the task-selected Python interpreter. Core runtime dependencies are in tools
 | event_analysis.py | normalized interval means plus mapped anchors/signals | cross-layer event summaries, timing bounds and censoring; no automatic clock fitting |
 | verify_claims.py | hashed artifacts, exact value locators, unit contracts and expressions | atomic numerical checks with explicit arithmetic/meaning boundaries |
 | evidence_model.py | v2/v3 ledger and artifacts | presentation-independent integrity, claim and completion checks |
+| snapshot_report.py | validated ledger, fresh package directory, optional exact historical renderer source root | immutable ledger/artifact/source package and path/hash mapping; no recalculation or refresh of historical claims |
 | write_report.py | validated ledger, optional presentation/table configuration and shared theme | JSON model or localized Markdown/offline HTML with summary, body and audit appendix; no fixed figure count |
 | check_report_layout.py | generated HTML, fresh check output, optional existing browser/previews/PDF | static/DOM layout checks and optional PDF export; actual visual review remains separately recorded |
 | test_tools.py / test_contracts.py / test_investigation.py / test_report_design.py | no private inputs | synthetic numerical, design-boundary, evidence, presentation and integrity checks |
 
 Adapters for arbitrary free-text exports, cumulative counters, clock fitting, exact aggregate reconstruction, automatic BA matching, event-aligned overlays, causal designs beyond the declared paired backend and Tigramite execution are **not** silently supplied by these primitives. Implement the smallest missing adapter when required, or return an explicit unavailable capability. Do not imply the library is a fully automatic root-cause classifier.
+
+Workbook audit `mode` records requested full/sample scope, not success. Inspect sheet, workbook and top-level execution `status` (`completed`, `partial`, `failed`) and scan boundaries. Read issues remain in JSON with scanned data; any such issue makes the CLI nonzero. Explicit row-limited sampling is a completed sample when no read error occurs, with full-scan completion reported separately.
 
 ## Window mapping v1
 

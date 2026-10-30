@@ -80,6 +80,18 @@ Inspect actual HTML previews and, when requested, PDF pages: no clipped/overlapp
 
 The renderer records theme, presentation settings and resource hashes in the audit sidecar linked from the appendix and checks protected inputs for mutation before saving. Keep run presentation/theme files, commands, layout results and review records with the analysis. Preserve v2/v3 ledger compatibility and JSON output; neither layout review nor file hashes certify scientific meaning or causal truth.
 
+Freeze retained runs before later source edits. `snapshot_report.py` creates a fresh directory with a ledger copy, referenced artifacts, renderer source tree and `snapshot_manifest.json`. It remaps paths while preserving expected artifact hashes, numerical claims and historical assessments. Export from the packaged renderer so its HTML source manifest refers to stable archived resources rather than a mutable checkout:
+
+```text
+python tools/snapshot_report.py --ledger logs/<run>/evidence_ledger.json --output-dir results/<run>/frozen
+python results/<run>/frozen/skill/tools/write_report.py --ledger results/<run>/frozen/ledger.json --format html --output results/<run>/frozen/diagnosis.html
+python tools/check_report_layout.py --html results/<run>/frozen/diagnosis.html --output logs/<run>/frozen_layout_checks.json --static-only
+```
+
+The package directory must not already exist. Missing/changed source or numerical artifacts are rejected. `--skill-root` identifies the original renderer tree; optional `--source-root` supplies an archived tree with exact expected tool bytes for historical recovery. A historical snapshot must still match every recorded tool hash; this is not permission to update expected hashes or to waive evidence validation. Preserve the original ledger/report and the snapshot's path mapping. Old visual/semantic review records remain historical records; perform and record checks for each new export separately. Snapshot creation neither executes archived scripts nor installs dependencies.
+
+Pass optional `--presentation logs/<run>/presentation.json` and `--theme logs/<run>/theme.json` when these settings are part of the export. The package preserves their bytes and records matching re-export arguments, so summary/table selection and theme do not depend on later edits to live configuration files. When recovering an old report, compare these explicit settings with its audit sidecar rather than assuming a file with a similar name is the original configuration.
+
 Add new language, presentation or export adapters without changing the analysis model or dataset assumptions. Use fresh synthetic probes and unchanged semantic inputs to verify that a visual revision preserves evidence. Keep generated reports, screenshots, PDFs and browser profiles out of skill commits.
 
 Design references: [Cisco technical whitepaper](https://www.cisco.com/c/en/us/products/collateral/wireless/white-paper-c11-740788.pdf), [IBM Carbon typography](https://www.carbondesignsystem.com/building-blocks/foundations/typography/style-strategies). Browser implementation references: [Chrome DevTools protocol](https://chromedevtools.github.io/devtools-protocol/) and [Chrome Headless command line](https://developer.chrome.com/docs/automation-and-testing/headless-cli). Borrow reading hierarchy and consistency; do not copy corporate branding or scientific claims.

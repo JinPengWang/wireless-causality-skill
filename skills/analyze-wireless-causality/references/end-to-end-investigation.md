@@ -37,6 +37,10 @@ If an uncertainty is unknown, report nominal alignment only. With known anchor a
 
 An optional signal threshold, bad direction and hold duration locate sustained threshold-classified intervals. Record the onset window, gaps and left/gap censoring. Returned timing bounds concern threshold-bin classification, not the physical onset of a mechanism. A recording that starts or resumes already abnormal cannot establish when deterioration began. No observed crossing within follow-up is not evidence that a mechanism never acted.
 
+Threshold follow-up runs from the anchor through `anchor_s + post_interval_s[1]`; the post interval's first endpoint controls the separate phase mean, not the beginning of threshold follow-up. `split_policy` controls phase means only. A threshold-classified bin can cross an anchor or follow-up boundary: retain its entire onset-window bounds and do not interpret the clipped `confirmed_at_s` as the time a physical response was measured or became available.
+
+Each response includes `followup` with requested/observed duration, coverage, last observed end and `complete`, `partial` or `unobserved` status. `gaps` covers the entire follow-up, including absent leading/trailing intervals and fully missing follow-up, even after an onset was found. Null or partial-coverage bins do not supply known threshold follow-up. When no usable observation exists, response status is `not_assessable`; otherwise `not_observed_in_followup` remains an observational statement whose scope must be read together with follow-up coverage. `right_censored` marks an unobserved tail. Onset left/gap censoring and lag bounds use only observations/gaps up to the onset; later missingness does not erase an observed onset.
+
 Use `detect_events.py` for excursion duration, deficit and sustained recovery/censoring in a selected series. Use the event-relative tool for cross-layer context and externally anchored comparison. Add tailored analyses of hysteresis, variability, convergence or recovery only when the data resolve them; keep selection and censoring rules explicit. Neither tool automatically identifies an intervention effect.
 
 ## Candidate record

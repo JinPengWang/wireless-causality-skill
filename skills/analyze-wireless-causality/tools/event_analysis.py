@@ -22,6 +22,39 @@ def phase_summary(rows, start, end, split_policy='reject'):
             'weighting': 'overlap-duration mean of fully observed interval means; partial windows excluded'}
 
 
+def threshold_followup(rows, start, end):
+    """Audit the entire threshold horizon, independently of finding a first onset.
+
+    Fully observed threshold bins contribute their clipped overlap. Missing or
+    partial bins contribute no assessable exposure because its location is unknown.
+    This preserves bin classification, without changing phase allocation policy.
+    """
+    cursor, observed, last_observed_end, gaps = start, 0., None, []
+    for _, row in rows:
+        left, right = max(start, row['start_s']), min(end, row['end_s'])
+        if right <= left or row['value'] is None or row['coverage'] < 1:
+            continue
+        close = math.isclose(left, cursor, rel_tol=0.,
+                             abs_tol=max(1e-9, 4*math.ulp(left), 4*math.ulp(cursor)))
+        if left > cursor and not close:
+            gaps.append([cursor, left])
+        observed += max(0., right-max(left, cursor))
+        cursor = max(cursor, right)
+        last_observed_end = cursor
+    close_end = math.isclose(cursor, end, rel_tol=0.,
+                             abs_tol=max(1e-9, 4*math.ulp(cursor), 4*math.ulp(end)))
+    if last_observed_end is None or (cursor < end and not close_end):
+        gaps.append([cursor, end])
+    # Normalize floating-point continuity in the same way as the onset scan.
+    requested = end-start
+    observed = requested if not gaps and last_observed_end is not None else min(requested, observed)
+    followup = {'start_s': start, 'end_s': end,
+                'status': 'unobserved' if last_observed_end is None else 'partial' if gaps else 'complete',
+                'observed_s': observed, 'requested_s': requested, 'coverage': observed/requested,
+                'last_observed_end_s': last_observed_end}
+    return followup, gaps, last_observed_end is None or not close_end
+
+
 def analyze(request, data):
     require_keys(request, ['schema_version', 'events', 'signals', 'pre_interval_s', 'post_interval_s'],
                  ['schema_version', 'data', 'events', 'signals', 'pre_interval_s', 'post_interval_s', 'split_policy'], 'event request')
@@ -103,21 +136,17 @@ def analyze(request, data):
                 hold = finite_number(signal.get('hold_s'), 'hold_s', positive=True)
                 if direction not in {'below', 'above'}:
                     raise ValueError('bad_direction must be below or above')
-                candidate, previous_end, onset, gaps = None, None, None, []
+                followup, gaps, right_censored = threshold_followup(rows, anchor, anchor+post[1])
+                candidate, previous_end, onset = None, None, None
                 for index, row in rows:
                     if row['end_s'] <= anchor or row['start_s'] >= anchor+post[1]:
                         continue
                     continuous = previous_end is not None and math.isclose(row['start_s'], previous_end, abs_tol=max(1e-9, 4*math.ulp(row['start_s']), 4*math.ulp(previous_end)), rel_tol=0.)
-                    if previous_end is None and row['start_s'] > anchor:
-                        gaps.append([anchor, row['start_s']])
                     if not continuous:
                         candidate = None
-                        if previous_end is not None:
-                            gaps.append([previous_end, row['start_s']])
                     previous_end = row['end_s']
                     if row['value'] is None or row['coverage'] < 1:
                         candidate = None
-                        gaps.append([row['start_s'], row['end_s']])
                         continue
                     bad = row['value'] < threshold if direction == 'below' else row['value'] > threshold
                     if not bad:
@@ -131,17 +160,20 @@ def analyze(request, data):
                         onset = {'window_index': candidate[0], 'window_start_s': candidate[1]['start_s'],
                                  'window_end_s': candidate[1]['end_s'], 'confirmed_at_s': confirmed_end}
                         break
-                response = {'status': 'observed_threshold_excursion' if onset else 'not_observed_in_followup',
+                response = {'status': 'observed_threshold_excursion' if onset else
+                                     'not_assessable' if followup['status'] == 'unobserved' else 'not_observed_in_followup',
                             'gaps': gaps, 'onset_window': onset, 'lag_bounds_s': None,
+                            'followup': followup, 'right_censored': right_censored,
                             'scope': 'First sustained threshold excursion in observed follow-up; not necessarily a response to the anchor.'}
                 earlier = [r for _, r in rows if onset and r['end_s'] <= onset['window_start_s']]
                 prior = earlier[-1] if earlier else None
                 prior_bad = prior is None or prior['value'] is None or prior['coverage'] < 1 or (prior['value'] < threshold if direction == 'below' else prior['value'] > threshold)
-                response['left_or_gap_censored'] = bool(prior_bad or gaps)
+                onset_gaps = [gap for gap in gaps if not onset or gap[0] < onset['window_start_s']]
+                response['left_or_gap_censored'] = bool(prior_bad or onset_gaps)
                 response['timing_meaning'] = 'Threshold-bin timing only, not a measured physical response onset'
                 if onset and uncertainty is not None and not response['left_or_gap_censored']:
                     response['lag_bounds_s'] = [onset['window_start_s']-anchor-uncertainty, onset['window_end_s']-anchor+uncertainty]
-                    response['strictly_after_anchor'] = response['lag_bounds_s'][0] > 0 and not gaps
+                    response['strictly_after_anchor'] = response['lag_bounds_s'][0] > 0 and not onset_gaps
                 else:
                     response['strictly_after_anchor'] = None
                 entry['response'] = response
