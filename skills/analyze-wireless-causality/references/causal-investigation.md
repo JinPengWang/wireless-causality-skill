@@ -45,6 +45,8 @@ Copy `assets/causal_request.template.json` into the current run. Resolve placeho
 
 This is a normalized interface example, not an acquisition schedule. Keep the adapter's source-row mapping and measurement contract alongside the data; optional `sources` entries contain source paths and SHA256, relative to the data file. Raw file names and vendor schemas do not enter the backend. Read only source formats authorized by the current task.
 
+When converting window tables into records, automate only a reviewed mechanical mapping. Preserve variable meaning, layer/direction, units, interval support, missingness, coverage, numerators/denominators, weights and source-row/hash links alongside the normalized data. Validate the alignment and weighting required by the selected backend; equal-row methods do not turn unequal-duration intervals into time-weighted estimates. Keep valid zeros, leave missing values null, and do not silently aggregate duplicates, synchronize clocks or infer independent units from file names. Different variables may have different units/layers; a single variable cannot conceal incompatible meanings under one name. Extract a reusable converter after a second reviewed schema demonstrates shared logic; automatic field semantics and root-cause ranking are not provided by this interface.
+
 Declare:
 
 - Question, population/scope and the actual independent experimental unit. Several recordings may share one unit. A recording cannot change its unit midstream. Null/unknown unit identity allows per-recording descriptive exploration, but does not create independent replication.
@@ -57,7 +59,7 @@ Declare:
 All recording/time pairs must be unique. Keep unrelated recordings separate, without manufactured temporal adjacency. A row is a source observation or reviewed analysis interval, **not** an independent experiment. Results retain zero-based `included_rows`/`excluded_rows`, or train/test indices, into `records`. Those indices refer to the normalized file, not directly to worksheet rows; retain the adapter's source mapping separately.
 
 ```text
-python tools/causal_analysis.py --request logs/<run>/causal_request.json --output logs/<run>/causal_results.json
+python -B "<skill_root>/tools/causal_analysis.py" --request logs/causal_request.json --output logs/causal_results.json
 ```
 
 ## Implemented backends

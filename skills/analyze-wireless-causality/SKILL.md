@@ -8,6 +8,20 @@ description: >-
 
 Turn an expert question, or an open-ended request to find problems, into a reproducible investigation. Use deterministic tools for calculations and domain reasoning for interpretation. Maintain competing explanations and seek evidence that could disprove the leading explanation. Let the current request determine the research focus; never presume a superior device, an anomaly, a root cause or a preferred algorithm. Apply consistent statistical rules across comparisons.
 
+## Match the work to the request
+
+Choose the analysis question and delivery requirements independently. Apply the relevant sections below; their numbering does not require every task to run the full investigation.
+
+| Requested analysis | Appropriate scope and stopping point |
+|---|---|
+| Explain one field or check a capability | Inspect the relevant definition, encoding, units, values and coverage. Answer the question or locate the unresolved meaning; a concise answer needs no run workspace, full capability matrix, ledger or report export. |
+| Describe or compare measurements | Audit the required inputs, establish comparable definitions/support, and report the requested differences and uncertainty. Stop at the descriptive answer; mechanism candidates and causal backends are optional. |
+| Explore for problems | Profile relevant measurements, preserve ordinary cases, and identify supported phenomena worth investigating, or report no clear phenomenon. Read section 6 for a lightweight first pass. |
+| Diagnose a phenomenon | Investigate competing mechanisms using available layers, executed checks, counterevidence and discriminating next tests. Apply sections 7–8 as useful. |
+| Estimate an intervention effect | Define the estimand and assess identification prerequisites before estimating an effect. Retain supported descriptive answers when the effect is not identifiable. |
+
+Resolve delivery separately: a concise response, a structured brief, or a formal report in the requested language/formats. A purely descriptive formal report can have `findings: []`; PDF delivery adds export and layout checks, not a mechanism requirement. Record `task`, `investigation.requested_scope`, `report_language` and `report_formats` in the existing manifest when maintaining a run. Assess question completeness against the requested question; an unasked causal effect does not make a completed descriptive answer partial.
+
 ## 1. Separate reusable knowledge from each investigation
 
 Keep three layers distinct:
@@ -24,26 +38,26 @@ Use only the input types and locations the user authorizes. When asked to read X
 
 Use the conda environment name or prefix supplied by the user. Record its interpreter, version and dependency versions with `tools/check_environment.py`. Do not silently switch environments or install packages. If no environment is supplied, continue read-only inspection using an already available interpreter and label that choice; resolve the runtime before an environment-dependent production analysis.
 
-Create `logs/<run_id>/` and `results/<run_id>/` beneath this SKILL.md directory. Keep source data read-only. Use unique run IDs and avoid overwriting earlier investigations.
+For calculations or retained artifacts, resolve `skill_root` to this skill's source directory and choose a fresh `run_root` outside it and outside skill-discovery directories, for example `<project>/runs/<run_id>/`. Preserve the live local-directory connection used for installation; a separate published source copy is unnecessary. Record both absolute roots with the resolved request. Keep source data read-only and earlier runs intact.
 
-- Put all analysis Python scripts in `tools/`. Keep reusable tools at its top level and run-specific adapters/reproduction scripts under `tools/runs/<run_id>/`; keep their settings in the run configuration.
-- Put the resolved request, mappings, input hashes, environment, intermediate tables, sample masks, source-row references and evidence ledger in `logs/<run_id>/`.
-- Put selected figures, structured analysis results and requested reports in `results/<run_id>/`. Resolve language and export formats from the current request; record any format that still needs an exporter.
+- Keep reusable tools in `<skill_root>/tools/`. Put run-specific adapters/reproduction scripts in `<run_root>/tools/`, with settings in the run configuration.
+- Put the resolved request, mappings, input hashes, environment, intermediate tables, sample masks, source-row references and evidence ledger in `<run_root>/logs/` as needed by the task.
+- Put selected figures, structured analysis results and requested reports in `<run_root>/results/`. Resolve language and export formats from the current request; record any format that still needs an exporter.
 - Keep raw/private measurements, logs and results out of source-control commits by default. Commit only reusable skill changes unless the user requests data publication.
 
 Example invocation patterns, with task-provided values:
 
 ```text
-conda run -n <environment> python tools/check_environment.py
-conda run -p <environment-prefix> python tools/check_environment.py --expected-prefix <environment-prefix>
-python tools/audit_workbooks.py --input <selected.xlsx> --output logs/<run_id>/audit.json
+conda run -n <environment> python -B "<skill_root>/tools/check_environment.py"
+conda run -p <environment-prefix> python -B "<skill_root>/tools/check_environment.py" --expected-prefix <environment-prefix>
+python -B "<skill_root>/tools/audit_workbooks.py" --input <selected.xlsx> --output logs/audit.json
 ```
 
-Set the working directory to the folder containing this SKILL.md, and use absolute input paths in resolved configurations. Use the verified interpreter consistently for subsequent commands. Treat nonzero exits as blocked steps; reuse an older artifact only when its source/configuration provenance still matches. The examples below abbreviate it as `python`.
+Set the working directory to `run_root`. In command examples replace `<skill_root>` with its absolute path and use the verified interpreter, abbreviated as `python -B`; `-B` avoids writing bytecode into the source tree. Command arguments under `logs/` and `results/` are run-relative; reusable tool/template references in prose are skill-relative. Use absolute raw-input paths in resolved configurations and preserve each tool's path base; see [references/tool-contracts.md](references/tool-contracts.md). Treat nonzero exits as blocked steps; reuse an older artifact only when its source/configuration provenance still matches. Existing runs and frozen packages stay at their original paths; apply this convention to new runs.
 
 ## 3. Frame the task and record a measurement contract
 
-Start from `assets/run_manifest.template.json`; fill a local copy under logs. Read [references/measurement-contract.md](references/measurement-contract.md).
+For a retained investigation, start from `<skill_root>/assets/run_manifest.template.json`; fill a local copy under logs. Read [references/measurement-contract.md](references/measurement-contract.md).
 
 Identify whether the task asks to discover phenomena, diagnose an event, compare entities, or estimate an intervention effect. Record the primary outcome, direction of deterioration, comparison unit, scope and intended decision. Do not assume a symptom or a preferred vendor when the question is exploratory.
 
@@ -57,13 +71,13 @@ Inventory sources and record:
 
 A filename parser is a configurable metadata hint. Validate its output against content. Do not require filenames to follow one convention.
 
-Run the streaming workbook audit. Inspect useful examples and missingness rather than dumping millions of rows into context. A sampled audit must be labelled sampled; it cannot establish whole-file absence or coverage. Inspect formulas/cached-value limitations when applicable.
+For workbook-based analysis, run the streaming workbook audit on the selected inputs. Inspect useful examples and missingness rather than dumping millions of rows into context. A sampled audit must be labelled sampled; it cannot establish whole-file absence or coverage. Inspect formulas/cached-value limitations when applicable.
 
 Check audit execution status separately from `mode` (`full` or `sample`). A sheet read error retains its `issue` and any scanned profile, marks the audit partial/failed, and makes the CLI return nonzero. Do not use an incomplete audit as a passed input check. An intentional `max_rows` sample can complete its requested scope without completing a full-sheet scan.
 
 ## 4. Determine what the data can support
 
-Build a capability table with `available`, `conditional` or `unavailable`, the prerequisites and the exact missing evidence. Continue useful lower-level analyses when an advanced method is unavailable.
+For an investigation, build a capability table for the requested analyses with `available`, `conditional` or `unavailable`, the prerequisites and the exact missing evidence. Continue useful lower-level analyses when an advanced method is unavailable.
 
 Examples: application goodput, observed retry fraction, complete retry chains, Block Ack interpretation, exact A-MPDU boundaries, event alignment, matched device contrasts and causal identification have different requirements.
 
@@ -82,16 +96,18 @@ If requested, calculate `effective_rate_proxy = datarate * (1 - PER)` using a do
 Map supported tables with `assets/window_request.template.json`, then run:
 
 ```text
-python tools/build_windows.py --request logs/<run_id>/window_request.json --output logs/<run_id>/windows.json
+python -B "<skill_root>/tools/build_windows.py" --request logs/window_request.json --output logs/windows.json
 ```
 
-This tool supports explicitly mapped interval means, interval amounts, count ratios, event means, event counts, event sums and normalized binary fractions. It validates decimal window boundaries and preserves empty complete captures separately from missing amounts. It does not infer units, decode free text, difference cumulative counters or synchronize clocks. Give compatible metrics a reviewed `measurement_id`; without it, definitions must match exactly. The identifier asserts a shared measurement contract, not merely matching names. Keep weighting and layer compatible. For unsupported sources, add a small adapter in tools, validate it on known examples, and record the resulting mapping and formula. Never use an unchecked generic `eval` transformation.
+This tool supports explicitly mapped interval means, interval amounts, count ratios, event means, event counts, event sums and normalized binary fractions. It validates decimal window boundaries and preserves empty complete captures separately from missing amounts. It does not infer units, decode free text, difference cumulative counters or synchronize clocks. Give compatible metrics a reviewed `measurement_id`; without it, definitions must match exactly. The identifier asserts a shared measurement contract, not merely matching names. Keep weighting and layer compatible. For unsupported sources, add a small adapter in the run's tools directory, validate it on known examples, and record the resulting mapping and formula. Never use an unchecked generic `eval` transformation.
 
 Exclude control/management traffic from data-rate and data-retry estimates unless that population is the explicit target. Keep data/control populations separate. Missing capture observations are not proof of zero offered traffic or of radio loss.
 
 ## 6. Compare phenomena before explaining them
 
 Read [references/comparison-and-events.md](references/comparison-and-events.md).
+
+For an open-ended first pass, summarize relevant field meanings/missingness, per-run trends and distributions, tails and low-performance duration using reviewed definitions. Compare ordinary runs and counterexamples alongside unusual cases. Keep a short phenomenon record with scope, selection rule, source/result locator, limitation and a useful next check. Stop when the requested exploration is answered; progress to mechanism diagnosis when requested or agreed. A full-column correlation scan, cause ranking and causal model are not prerequisites.
 
 Separate traffic directions in figures and statistics. Match on relevant pre-exposure conditions, excluding the factor being studied and avoiding indiscriminate adjustment for mediators. Show common-support coverage and unmatched conditions. Keep entity-pair interactions visible; an AP effect may depend on its peer STA.
 
@@ -102,9 +118,9 @@ For unscheduled or uncertain exposures, compare time-weighted distributions, per
 Prefer a small number of readable lines or faceted panels. Show the full cohort in compact summaries; focus detailed traces on selected cases with the selection rule disclosed.
 
 ```text
-python tools/compare_runs.py --windows logs/<run_id>/windows.json --output logs/<run_id>/comparison.json --reference <entity>
-python tools/plot_windows.py --windows logs/<run_id>/windows.json --output-dir results/<run_id>/distributions --mode distribution
-python tools/plot_windows.py --windows logs/<run_id>/windows.json --output-dir results/<run_id>/timelines --mode timeline
+python -B "<skill_root>/tools/compare_runs.py" --windows logs/windows.json --output logs/comparison.json --reference <entity>
+python -B "<skill_root>/tools/plot_windows.py" --windows logs/windows.json --output-dir results/distributions --mode distribution
+python -B "<skill_root>/tools/plot_windows.py" --windows logs/windows.json --output-dir results/timelines --mode timeline
 ```
 
 The built-in timeline plots use separate source-relative axes, not automatic event alignment. Add a reviewed alignment adapter when external anchors exist. The comparison tool operates on declared independent pairs and conditions; it cannot verify independence from names. Inspect its condition-level contrasts and unmatched cells before interpreting the pooled contrast. A matching metric name and unit alone do not establish compatible estimands.
@@ -125,6 +141,8 @@ Use [references/evidence-and-causality.md](references/evidence-and-causality.md)
 
 For every candidate, name the phenomena it explains, its falsifiable prediction, strongest alternative explanation, existing counterevidence and next distinguishing check. Add temporal ordering, negative controls and expected affected outcomes where observable. Trace a proposed mechanism to the measured symptom. A vendor difference or an extreme parameter is not sufficient by itself.
 
+For high-priority candidates, link executed checks to specific result locations and separate them from planned measurements. When improvement directions are requested, state who can control the proposed change, the observable validation signal, known tradeoffs and the result that would lower its priority. Use the existing candidate/evidence fields; see the example in [references/end-to-end-investigation.md](references/end-to-end-investigation.md).
+
 Inspect response magnitude, delay, convergence, hysteresis and recovery where phase timing and sampling permit. Compare before/during/after only when those phases are defensible. Retain unmatched context as descriptive evidence rather than presenting it as a counterfactual.
 
 For retry behavior, examine the tail of observed attempt-chain lengths, durations, rate sequences and burden on observed airtime where reconstructible. Distinguish observed maxima from configured retry limits. Compare traffic class, frame size, PHY rate, capture completeness and peer behavior before attributing a difference to firmware.
@@ -144,7 +162,7 @@ Read [references/causal-investigation.md](references/causal-investigation.md). C
 For the bundled supported methods, resolve `assets/causal_request.template.json` and normalized data using `assets/causal_data.template.json`. Declare variable meanings, units/time scales, controls and their rationale, independent experimental units, effective sample masks, assumptions and scope. Keep deterministic derivations out of purported new causal relationships. Do not treat repeated windows or repeated events as independent experiments.
 
 ```text
-python tools/causal_analysis.py --request logs/<run_id>/causal_request.json --output logs/<run_id>/causal_results.json
+python -B "<skill_root>/tools/causal_analysis.py" --request logs/causal_request.json --output logs/causal_results.json
 ```
 
 The implemented methods are per-recording adjusted linear association, lagged incremental prediction with temporal and independent-unit holdouts, and independent paired contrasts with an optional explicitly declared randomized paired design. They preserve recording-level diagnostics, exclusions, influence/heterogeneity, attempted methods and failures. These are scoped choices, not mandatory defaults or automatic root-cause classifiers. Use another validated backend when the design or variable types require it.
@@ -155,16 +173,16 @@ Predeclare appropriate validation: held-out independent units when selection/tun
 
 Advanced methods unavailable or unsuitable: record `unsupported` separately from `planned`, `failed`, `partial` and `executed`. Use an explicitly configured, appropriate validated fallback, preserving the original attempt. Read [references/tigramite-backend.md](references/tigramite-backend.md) only when its optional discovery methods could resolve a stated uncertainty; it remains an integration specification, not an implemented dependency here.
 
-When causal effects are not identifiable, retain `not_identified` for that question while completing supported relationship exploration, mechanism predictions, counterevidence and discriminating checks. A generic disclaimer cannot substitute for those analyses.
+When an intervention effect is requested but not identifiable, retain `not_identified` for that subquestion. When diagnosis is requested, still complete supported relationship exploration, mechanism predictions, counterevidence and discriminating checks. A generic disclaimer cannot substitute for those supported analyses. A descriptive-only request can finish without mechanism analysis.
 
 ## 9. Check claims and deliver a reproducible answer
 
-Read [references/evidence-claims.md](references/evidence-claims.md). Create a version 3 ledger from `assets/evidence_ledger.template.json`; old v2 ledgers remain readable without pretending they received the new checks.
+For retained structured analyses and reports, read [references/evidence-claims.md](references/evidence-claims.md) and create a version 3 ledger from `<skill_root>/assets/evidence_ledger.template.json`; old v2 ledgers remain readable without pretending they received the new checks. A concise field explanation needs only the relevant source attribution and uncertainty, without creating report artifacts.
 
 For each numerical claim, record an atomic statement, exact data location, field, unit, measurement basis, calculation and justified tolerance in `assets/numeric_claims.template.json` or the ledger's embedded bundle. Split compound claims into separately supported components. Keep source-row mappings for derived results. Use the checker to recompute supported formulas:
 
 ```text
-python tools/verify_claims.py --request logs/<run_id>/numeric_claims.json --output logs/<run_id>/claim_checks.json
+python -B "<skill_root>/tools/verify_claims.py" --request logs/numeric_claims.json --output logs/claim_checks.json
 ```
 
 Distinguish file integrity, locator existence, numerical agreement and substantive semantic/causal review. Hashes and successful arithmetic do not prove that the claim's wording, population or causal interpretation is correct. Review unregistered numbers in prose, tables and figure annotations; mark manual/unfinished checks accordingly.
@@ -173,18 +191,18 @@ Link findings to observed phenomena. For every mechanism candidate include its p
 
 Use text, tables, structured results and readable figures according to what supports the answer; do not impose a fixed figure count. For figures, explain population, axes, units, window, weighting, selection and uncertainty. Validate readability separately from file integrity.
 
-Read [references/report-design.md](references/report-design.md) before composing the report. Keep analysis results separate from presentation. Choose language and export formats from the task; when unspecified, retain JSON and provide editable Markdown plus an offline HTML reading edition. Resolve `assets/report/presentation.template.json` with explicitly selected summary IDs, short item titles and optional claim-backed tables. Use the shared report theme for bundled and run-specific plots. Do not place raw markup or large audit records inside prose fields.
+For a requested report, read [references/report-design.md](references/report-design.md) before composing it. Keep analysis results separate from presentation. Choose language and export formats from the task; when report formats are unspecified, retain JSON and provide editable Markdown plus an offline HTML reading edition. Resolve `<skill_root>/assets/report/presentation.template.json` with explicitly selected summary IDs, short item titles and optional claim-backed tables. Use the shared report theme for bundled and run-specific plots. Do not place raw markup or large audit records inside prose fields.
 
 ```text
-python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --format json --output results/<run_id>/analysis.json
-python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --presentation logs/<run_id>/presentation.json --format markdown --output results/<run_id>/diagnosis.md
-python tools/write_report.py --ledger logs/<run_id>/evidence_ledger.json --presentation logs/<run_id>/presentation.json --format html --output results/<run_id>/diagnosis.html
-python tools/check_report_layout.py --html results/<run_id>/diagnosis.html --output logs/<run_id>/layout_checks.json --preview-dir results/<run_id>/previews
+python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --format json --output results/analysis.json
+python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --presentation logs/presentation.json --format markdown --output results/diagnosis.md
+python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --presentation logs/presentation.json --format html --output results/diagnosis.html
+python -B "<skill_root>/tools/check_report_layout.py" --html results/diagnosis.html --output logs/layout_checks.json --preview-dir results/previews
 ```
 
-Before a report becomes a retained deliverable, freeze its ledger, referenced artifacts and renderer sources into a new directory with `tools/snapshot_report.py --ledger logs/<run_id>/evidence_ledger.json --output-dir results/<run_id>/frozen`. Use the packaged `skill/tools/write_report.py` and `ledger.json` for subsequent exports. The snapshot preserves expected hashes and historical assessments; it does not certify a new export's layout. If a historical tool changed, supply an exact matching archived `--source-root`; never refresh an old expected hash to make validation pass. See [references/report-design.md](references/report-design.md).
+Before a report becomes a retained deliverable, freeze its ledger, referenced artifacts and renderer sources into a new directory with `python -B "<skill_root>/tools/snapshot_report.py" --ledger logs/evidence_ledger.json --output-dir results/frozen`. Use the packaged `skill/tools/write_report.py` and `ledger.json` for subsequent exports. New snapshots preserve skill instructions as `skill/skill_instructions.md`, with the path and original byte hash in the manifest. Leave existing snapshots, names and manifests intact. The snapshot preserves expected hashes and historical assessments; it does not certify a new export's layout. If a historical tool changed, supply an exact matching archived `--source-root`; never refresh an old expected hash to make validation pass. See [references/report-design.md](references/report-design.md).
 
-Organize the answer around scope and measurement limits, observed phenomena/comparisons, prioritized explanations, counterevidence and discriminating next checks. Report normal behavior or insufficient discrimination when that is the result. Keep effect magnitude, statistical evidence and practical importance separate.
+Organize the answer around the requested scope, measurement limits and supported results. For diagnosis, include prioritized explanations, counterevidence and discriminating next checks; for descriptive work, report the comparisons without manufacturing mechanisms. Report normal behavior or insufficient discrimination when that is the result. Keep effect magnitude, statistical evidence and practical importance separate.
 
 Use a short executive summary, readable analysis body and linked audit appendix. Keep important limitations, failed/null results and counterevidence in the body. Move repeated numerical checks, exact locators, hashes and execution metadata to the appendix. Number figures/tables consistently; keep table values tied to verified claims and declared units. Split dense plots and wide tables without omitting comparison objects. Do not impose fixed page, word or figure counts.
 
@@ -195,7 +213,7 @@ Record execution completion, data capability, question-answer completeness and d
 For reusable changes, run meaningful numerical, design-boundary and integrity regressions, and test the end-to-end workflow on a different synthetic task:
 
 ```text
-python -m unittest discover -s tools -p "test_*.py"
+python -B -m unittest discover -s "<skill_root>/tools" -p "test_*.py"
 ```
 
 ## Extension rule

@@ -14,8 +14,7 @@ from write_report import validate_evidence
 
 class ToolsTests(unittest.TestCase):
     def setUp(self):
-        self.test_base=Path(__file__).resolve().parents[1]/'logs'/'tool_tests'
-        self.test_base.mkdir(parents=True,exist_ok=True)
+        self.test_base=Path(tempfile.gettempdir())
         self.tmp=tempfile.TemporaryDirectory(dir=self.test_base,prefix='case_');self.root=Path(self.tmp.name)
     def tearDown(self):
         if self.root.resolve().parent != self.test_base.resolve():raise RuntimeError('Unexpected test cleanup path')

@@ -17,8 +17,7 @@ class AuditStatusTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.skill_root = Path(__file__).resolve().parents[1]
-        cls.test_base = cls.skill_root / 'logs' / 'audit_tests'
-        cls.test_base.mkdir(parents=True, exist_ok=True)
+        cls.test_base = Path(tempfile.gettempdir())
         cls.temporary = tempfile.TemporaryDirectory(prefix='regression_', dir=cls.test_base)
         cls.run_root = Path(cls.temporary.name)
 

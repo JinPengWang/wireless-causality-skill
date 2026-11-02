@@ -24,8 +24,7 @@ def tree_hashes(root):
 
 class ReportSnapshotTests(unittest.TestCase):
     def setUp(self):
-        self.base = SKILL/'logs'/'snapshot_tests'
-        self.base.mkdir(parents=True, exist_ok=True)
+        self.base = Path(tempfile.gettempdir())
         self.temp = tempfile.TemporaryDirectory(dir=self.base)
         self.root = Path(self.temp.name)
         self.skill = self.root/'source_skill'
@@ -81,6 +80,44 @@ class ReportSnapshotTests(unittest.TestCase):
         return subprocess.run([sys.executable, '-B', '-X', 'utf8', str(skill/'tools'/'write_report.py'),
                                '--ledger', str(ledger), '--output', str(output), '--format', 'html'],
                               capture_output=True, text=True, encoding='utf-8')
+
+    def test_new_snapshot_preserves_instructions_without_a_skill_entry(self):
+        instructions = self.skill/'SKILL.md'
+        instructions.write_text('---\nname: synthetic-only\n---\nOriginal instructions.\n', encoding='utf-8')
+        before = tree_hashes(self.skill)
+        # The same source may be both a runtime document and located tool evidence.
+        self.report['provenance']['artifacts'].append({
+            'role': 'tool', 'path': str(instructions), 'sha256': sha256(instructions)})
+        write_json(self.ledger, self.report)
+        manifest = snapshot(self.ledger, self.output, skill_root=self.skill)
+        archived = self.output/'skill'/'skill_instructions.md'
+        self.assertEqual(archived.read_bytes(), instructions.read_bytes())
+        self.assertEqual(list(self.output.rglob('SKILL.md')), [])
+        self.assertEqual(tree_hashes(self.skill), before)
+        entry = next(item for item in manifest['runtime_resources']
+                     if item['source_path'] == str(instructions.resolve()))
+        self.assertEqual(entry['snapshot_path'], 'skill/skill_instructions.md')
+        copied = read_json(self.output/'ledger.json')
+        self.assertEqual(copied['provenance']['artifacts'][-1]['path'], entry['snapshot_path'])
+        for item in manifest['runtime_resources']+manifest['artifacts']:
+            self.assertEqual(sha256(self.output/item['snapshot_path']), item['sha256'])
+        # Absolute re-export arguments must work from a separate run directory.
+        for command in manifest['reexport_commands'].values():
+            result = subprocess.run(command, cwd=self.root, capture_output=True, text=True, encoding='utf-8')
+            self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_resnapshot_retains_archived_instructions_and_leaves_old_package_unchanged(self):
+        instructions = self.skill/'skill_instructions.md'
+        instructions.write_text('Previously archived instruction bytes.\n', encoding='utf-8')
+        old = snapshot(self.ledger, self.output, skill_root=self.skill)
+        self.assertTrue((self.output/'skill'/'skill_instructions.md').is_file())
+        before = tree_hashes(self.output)
+        newer = self.root/'new_bundle'
+        snapshot(self.output/'ledger.json', newer, skill_root=self.output/'skill')
+        self.assertEqual(tree_hashes(self.output), before)
+        self.assertEqual((newer/'skill'/'skill_instructions.md').read_bytes(), instructions.read_bytes())
+        self.assertEqual(list(newer.rglob('SKILL.md')), [])
+        self.assertEqual(read_json(self.output/'snapshot_manifest.json'), old)
 
     def test_snapshot_reexports_after_original_tools_change_and_keeps_history(self):
         original_html = self.data/'original.html'

@@ -22,8 +22,7 @@ from write_report import render, validate_evidence, verify_locator
 
 class ContractTests(unittest.TestCase):
     def setUp(self):
-        self.base = Path(__file__).resolve().parents[1] / 'logs' / 'tool_tests'
-        self.base.mkdir(parents=True, exist_ok=True)
+        self.base = Path(tempfile.gettempdir())
         self.temp = tempfile.TemporaryDirectory(dir=self.base, prefix='contract_')
         self.root = Path(self.temp.name)
 

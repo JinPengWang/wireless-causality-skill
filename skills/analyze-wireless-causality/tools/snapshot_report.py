@@ -48,8 +48,10 @@ def _runtime_files(root):
     if not tools.is_dir() or not assets.is_dir():
         raise ValueError('Renderer source root needs tools/ and assets/report/: '+str(root))
     paths = sorted(tools.glob('*.py'))+sorted(p for p in assets.rglob('*') if p.is_file())
-    if (root/'SKILL.md').is_file():
-        paths.append(root/'SKILL.md')
+    for name in ['SKILL.md', 'skill_instructions.md']:
+        if (root/name).is_file():
+            paths.append(root/name)
+            break
     for path in paths:
         if not path.is_file() or _relative(path.resolve(), root) is None:
             raise ValueError('Runtime resource escapes its source root: '+str(path))
@@ -59,6 +61,14 @@ def _runtime_files(root):
         if not (assets/name).is_file():
             raise ValueError('Missing renderer asset: '+str(assets/name))
     return paths
+
+
+def _runtime_destination(relative):
+    # Preserve instruction bytes in new packages without publishing a second
+    # skill entry. Never rename resources in an existing snapshot.
+    if relative == Path('SKILL.md'):
+        relative = Path('skill_instructions.md')
+    return Path('skill')/relative
 
 
 def _check_output(output, skill_root, source_root, ledger):
@@ -135,7 +145,7 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
             observe(path.resolve())
     for path in _runtime_files(source_root):
         relative = path.relative_to(source_root)
-        destination = Path('skill')/relative
+        destination = _runtime_destination(relative)
         digest = observe(path.resolve())
         plan(path.resolve(), destination, digest)
         resource_entries.append({'source_path': str(path.resolve()), 'snapshot_path': destination.as_posix(), 'sha256': digest})
@@ -152,7 +162,7 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
         relative = _relative(original, skill_root) if kind == 'provenance' and artifact.get('role') == 'tool' else None
         if relative is not None:
             tool_paths[original] = relative
-            canonical_paths[original] = Path('skill')/relative
+            canonical_paths[original] = _runtime_destination(relative)
     rewritten_paths = {}
     for (pointer, kind, artifact), (_, _, copied) in zip(originals, copies):
         path_text, expected = artifact.get('path'), artifact.get('sha256')

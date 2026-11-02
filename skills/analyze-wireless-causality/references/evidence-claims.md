@@ -37,7 +37,7 @@ The pass criterion is:
 `abs(asserted - recomputed) <= absolute + relative * abs(recomputed)`
 
 ```text
-python tools/verify_claims.py --request logs/<run>/numeric_claims.json --output logs/<run>/claim_checks.json
+python -B "<skill_root>/tools/verify_claims.py" --request logs/numeric_claims.json --output logs/claim_checks.json
 ```
 
 Per-claim outputs preserve source values, locators, units, expression and errors. Wrong numbers produce `mismatch`; invalid inputs/expressions produce `failed`. The CLI returns nonzero for those results while saving the diagnostic output. Files are checked again for changes during verification. A manual claim uses `verification: manual` with a reason and remains `not_checked` by this tool. Figures and textual evidence are valid evidence carriers, but do not become automatically verified numerical values through an image/file hash.
@@ -65,9 +65,9 @@ Legacy v2 ledgers remain readable. They do not receive v3 numerical or assessmen
 `evidence_model.py` validates the ledger independently of rendering. `write_report.py` exports a presentation-independent JSON model (ledger plus verification results), Markdown or offline HTML. The reader editions share one semantic rendering path, with a summary/body and linked audit appendix:
 
 ```text
-python tools/write_report.py --ledger logs/<run>/evidence_ledger.json --format json --output results/<run>/analysis.json
-python tools/write_report.py --ledger logs/<run>/evidence_ledger.json --format markdown --output results/<run>/diagnosis.md
-python tools/write_report.py --ledger logs/<run>/evidence_ledger.json --presentation logs/<run>/presentation.json --format html --output results/<run>/diagnosis.html
+python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --format json --output results/analysis.json
+python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --format markdown --output results/diagnosis.md
+python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --presentation logs/presentation.json --format html --output results/diagnosis.html
 ```
 
 Reader editions have English and Chinese labels. Other languages supply `--presentation labels.json` with matching `language` and a complete `labels` mapping; exact keys are in `report_labels.EN` (also re-exported by `write_report.py`). Statement content must itself be authored in the requested language. JSON export does not impose a presentation language. See [report-design.md](report-design.md) for summary selection, claim-backed numeric tables, theme overrides, offline HTML, optional Chromium PDF export and actual visual-review requirements. Other document formats require separate exporters. Do not rename a file or mark an unimplemented/unreviewed export as complete.

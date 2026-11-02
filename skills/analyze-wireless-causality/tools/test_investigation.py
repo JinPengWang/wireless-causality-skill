@@ -193,8 +193,7 @@ class EventTests(unittest.TestCase):
 
 class EvidenceTests(unittest.TestCase):
     def setUp(self):
-        self.parent=Path(__file__).resolve().parents[1]/'logs'/'investigation_tests'
-        self.parent.mkdir(parents=True,exist_ok=True)
+        self.parent=Path(tempfile.gettempdir())
         self.tmp=tempfile.TemporaryDirectory(dir=self.parent);self.root=Path(self.tmp.name)
     def tearDown(self):
         if self.root.resolve().parent != self.parent.resolve():raise RuntimeError('Unexpected cleanup path')

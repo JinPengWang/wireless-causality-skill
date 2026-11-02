@@ -60,8 +60,7 @@ def presentation():
 
 class ReportDesignTests(unittest.TestCase):
     def setUp(self):
-        self.base = Path(__file__).resolve().parents[1]/'logs'/'report_tests'
-        self.base.mkdir(parents=True, exist_ok=True)
+        self.base = Path(tempfile.gettempdir())
         self.temp = tempfile.TemporaryDirectory(dir=self.base)
         self.root = Path(self.temp.name)
         self.report = fixture(self.root)

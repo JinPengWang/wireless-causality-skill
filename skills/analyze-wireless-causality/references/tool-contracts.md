@@ -1,8 +1,23 @@
 # Tool contracts
 
-Store run-specific Python adapters/reproduction scripts under tools/runs/<run_id>, with their input/output data and settings under logs and results. Keep that runtime script subtree out of source-control commits unless intentionally generalized.
+For new runs, use a fresh `run_root` outside `skill_root` and skill-discovery directories. Keep reusable source tools in `<skill_root>/tools/`; store run-specific adapters/reproduction scripts in `<run_root>/tools/`, settings/intermediates in `<run_root>/logs/`, and selected outputs in `<run_root>/results/`. Keep private/runtime files out of source-control commits unless intentionally published or generalized. Preserve the existing live installation connection and historical paths; this convention does not migrate old runs.
 
 Use the task-selected Python interpreter. Core runtime dependencies are in tools/requirements.txt. Do not install all optional causal/ML dependencies for simple comparisons.
+
+## Working directory and path bases
+
+Set cwd to `run_root`; invoke reusable scripts by absolute path with `python -B "<skill_root>/tools/<tool>.py"`. Templates and reusable tool names in these references are relative to `skill_root`; command arguments `logs/...` and `results/...` are relative to cwd. Resolve task-provided paths once, record both roots and actual commands with the run, and keep raw-input paths absolute. Preserve these existing tool contracts:
+
+| Reference | Path base |
+|---|---|
+| CLI `--request`, `--ledger`, `--output`, `--presentation`, `--theme` | cwd, unless absolute |
+| `build_windows` request `sources[].path` | cwd, unless absolute; it is not relative to the request file |
+| Event/causal request `data.path` | Request file's parent |
+| Event/causal normalized-data `sources[].path` | Normalized data file's parent |
+| Numeric claim bundle `artifacts.*.path` | Request file's parent; the ledger's parent for an embedded bundle |
+| Ledger evidence, figures and provenance `path` | Ledger's parent |
+
+Do not rewrite historical requests to a different path base. Regression fixtures use unique system temporary directories (`tempfile`; configurable through the interpreter's temporary-directory environment) and retain their cleanup bounds, so tests need not write into the installed source. `-B` prevents source bytecode writes; this convention does not set OS permissions or make historical run scripts portable.
 
 ## Implemented tools
 
@@ -19,7 +34,7 @@ Use the task-selected Python interpreter. Core runtime dependencies are in tools
 | event_analysis.py | normalized interval means plus mapped anchors/signals | cross-layer event summaries, timing bounds and censoring; no automatic clock fitting |
 | verify_claims.py | hashed artifacts, exact value locators, unit contracts and expressions | atomic numerical checks with explicit arithmetic/meaning boundaries |
 | evidence_model.py | v2/v3 ledger and artifacts | presentation-independent integrity, claim and completion checks |
-| snapshot_report.py | validated ledger, fresh package directory, optional exact historical renderer source root | immutable ledger/artifact/source package and path/hash mapping; no recalculation or refresh of historical claims |
+| snapshot_report.py | validated ledger, fresh package directory, optional exact historical renderer source root | immutable ledger/artifact/source package and path/hash mapping; instructions saved as skill_instructions.md in new packages; no recalculation or refresh of historical claims |
 | write_report.py | validated ledger, optional presentation/table configuration and shared theme | JSON model or localized Markdown/offline HTML with summary, body and audit appendix; no fixed figure count |
 | check_report_layout.py | generated HTML, fresh check output, optional existing browser/previews/PDF | static/DOM layout checks and optional PDF export; actual visual review remains separately recorded |
 | test_tools.py / test_contracts.py / test_investigation.py / test_report_design.py | no private inputs | synthetic numerical, design-boundary, evidence, presentation and integrity checks |
@@ -62,7 +77,7 @@ See [evidence-claims.md](evidence-claims.md) for atomic numeric claims, table/JS
 
 See [report-design.md](report-design.md) for presentation schema v1, shared theme/plot rules, source protection, table splitting/rounding and the browser/manual layout-review boundary. Browser rendering is optional and uses an existing Chromium executable plus optional websocket-client; the exporter does not install a browser or weaken its sandbox. Preserve analysis/evidence content across presentation changes.
 
-Run all regression cases with `python -m unittest discover -s tools -p "test_*.py"`. A platform-denied hardlink integration test is reported as skipped, not passed. Keep runtime artifacts out of commits and do not claim a test ran merely because a planned check appears in a template.
+Run all regression cases from `run_root` with `python -B -m unittest discover -s "<skill_root>/tools" -p "test_*.py"`. A platform-denied hardlink integration test is reported as skipped, not passed. Keep runtime artifacts out of commits and do not claim a test ran merely because a planned check appears in a template.
 
 ## Extension acceptance
 

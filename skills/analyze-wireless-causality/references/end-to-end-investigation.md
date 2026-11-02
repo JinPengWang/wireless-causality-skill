@@ -26,7 +26,7 @@ Record whether each anchor is external, assumed from a schedule, or selected fro
 `event_analysis.py` consumes normalized interval means and explicit event-to-recording mappings. It can summarize multiple named layers without fixed field names, filenames or phase durations:
 
 ```text
-python tools/event_analysis.py --request logs/<run>/event_request.json --output logs/<run>/event_results.json
+python -B "<skill_root>/tools/event_analysis.py" --request logs/event_request.json --output logs/event_results.json
 ```
 
 Copy `assets/event_request.template.json`. Configure the pre/post ranges, selected signals, anchor uncertainty and each signal's relative clock-error bound. Input signals must already use the declared common anchor coordinate. The tool does not fit clock transforms or infer movement labels. One recording must retain the same independent unit across events.
@@ -54,3 +54,18 @@ Every mechanism candidate must state:
 5. The next check that can distinguish the explanations, and what result would weaken each one.
 
 A high retry count, a rate plateau, an AP difference or a successful optimization is task-specific evidence. Do not turn it into a universal diagnosis threshold, device ranking or prescribed optimization. Report a useful narrowed candidate set when identification is not possible, together with the relation exploration and discriminating checks actually completed.
+
+## Connect checks to results and requested actions
+
+For high-priority candidates, make the executed check, located result and remaining explanation branch easy to follow. Reuse `support`, `counterevidence`, `evidence[].supports` and `next_test`. An evidence JSON pointer such as `/checks/wired_baseline` must point to the actual check result in the hashed artifact; a whole-file/root pointer establishes only file scope. Use the execution labels `planned`, `executed`, `partial`, `unsupported` or `failed` in the result/prose as appropriate, without changing the candidate's evidence-status enum. A detailed future experiment is still planned.
+
+Illustrative candidate wording (replace with actual evidence; this is not an executed experiment):
+
+| Existing field | Example use |
+|---|---|
+| `prediction` | If the wired path limits delivery, a wired-only baseline under matched transport/load should reproduce a comparable cap. |
+| `support` and `evidence` | Executed trace review locates a receiving plateau; link its specific result and source rows. This supports the symptom, while the independent wired baseline remains planned. |
+| `counterevidence` | Record measured cases that weaken the wired-path account; state explicitly when the relevant counters or baseline were not measured. |
+| `next_test` | Planned: the test operator measures a wired-only baseline and endpoint/port counters under matched load. If baseline capacity clearly exceeds the observed delivery and those counters remain normal, lower this candidate's priority. |
+
+When improvement directions are requested, add the controllable lever or research direction, who can change it, the observable validation outcome, known costs/tradeoffs and the result that would weaken the recommendation. Use existing `statement`, `prediction`, `next_test` or `limitations`; a compact optional table is useful only when it clarifies the next decision. For the example, access to the wired test setup and measurement time may be unknown; firmware control requires vendor confirmation. Record unknown feasibility/costs explicitly. A proposed measurement narrows explanations; it does not establish a performance gain. Quantify an expected benefit only when evidence supports it.
