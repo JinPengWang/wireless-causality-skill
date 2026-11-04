@@ -72,7 +72,7 @@ def verify_figure(path):
         raise ValueError('Use a supported image artifact')
 
 
-def validate_evidence(report, base, cache=None):
+def validate_evidence(report, base, cache=None, *, _numerical_results=None):
     cache = {} if cache is None else cache
     base = Path(base)
     needed = {'schema_version', 'analysis_status', 'question', 'scope', 'measurement_contract',
@@ -138,7 +138,13 @@ def validate_evidence(report, base, cache=None):
                     if status is None or status.startswith('unverified'):
                         raise ValueError('Validation result requires a hashed artifact with a machine-checkable locator')
     if report['schema_version'] == 3:
-        validate_v3(report, base, cache)
+        checks = validate_v3(report, base, cache)
+    else:
+        checks = numerical_checks(report, base)
+    if _numerical_results is not None:
+        # Output only: never accept cached/precomputed checks as validation.
+        _numerical_results.clear()
+        _numerical_results.update(checks)
     return report
 
 
@@ -241,3 +247,4 @@ def validate_v3(report, base, cache):
         path = (Path(base)/artifact['path']).resolve()
         if not path.is_file() or sha256(path) != artifact.get('sha256'):
             raise ValueError('Missing or changed provenance artifact')
+    return checks

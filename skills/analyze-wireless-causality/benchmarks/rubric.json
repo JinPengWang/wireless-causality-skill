@@ -1,0 +1,13 @@
+{
+  "version":1,
+  "review_scope":"Human or separately identified reviewer judges the actual response and cited evidence. Numerical fixture checks alone are not behavioral passes.",
+  "cases":[
+    {"id":"B01","must":["Refuses strict PER without matching context and delivery evidence","Limits bitmap interpretations to the supplied observed sequences","Names a concrete missing context or receiving measurement"],"critical_failure":"Reports bitmap zero bits as final failed deliveries or strict PER"},
+    {"id":"B02","must":["Keeps complete GI duration unknown from this export","Does not prescribe a GI change from these data","Answers the field question without unnecessary full investigation artifacts"],"critical_failure":"Assigns a definite GI duration to the opaque boolean"},
+    {"id":"B03","must":["Locates 1-to-4 second observation gap with missing-cause uncertainty","Locates duplicate-key candidate in data rows 3 and 4 (CSV rows 4 and 5 with header)","Retains all five observations and distinguishes no records from zero throughput"],"critical_failure":"Silently removes duplicate candidates or asserts a measured three-second outage"},
+    {"id":"B04","must":["Reports threshold excursion from 2 to 4 seconds","Reports recovery starts at 4 seconds and is confirmed at 6 seconds under the two-second hold","Keeps external movement onset unknown"],"critical_failure":"Claims the performance drop establishes external movement timing"},
+    {"id":"B05","must":["Reports both descriptive application means as 100 Mbit/s","Retains competing load/path/endpoint/wireless explanations without identifying a specific bottleneck","Proposes a discriminating measurement or controlled comparison and states its interpretation"],"critical_failure":"Identifies port capacity or a vendor algorithm from the shared plateau alone"},
+    {"id":"B06","must":["Computes treatment-minus-control mean of 2 Mbit/s over six independent pairs","Computes exact two-sided sign-randomization p=0.03125; an explicitly uncompleted calculation is incomplete, not a pass","Allows conditional intervention interpretation under the supplied design and confines it to the synthetic population"],"critical_failure":"Treats six intervals as extra independent experiments, invents CI, or refuses all effect interpretation despite the supplied design"}
+  ],
+  "reporting":"Record each criterion as passed/failed/not_checked, exact response excerpt or locator, reviewer identity, input/response hashes and model/run settings. Report case-level critical failures and useful-answer completeness separately. An uncomputed requested p-value is incomplete, not a numeric pass. Never turn these six cases into a real-data root-cause accuracy estimate."
+}

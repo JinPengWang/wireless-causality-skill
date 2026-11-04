@@ -83,6 +83,8 @@ Examples: application goodput, observed retry fraction, complete retry chains, B
 
 Check type/range errors, malformed unit strings, all-null fields, constant fields, duplicate records, counter resets, sequence wrap, capture gaps and clock discontinuities. A field being populated does not establish that its meaning is usable. Do not convert malformed or missing values to zero.
 
+After reviewing an explicit table/time/identity mapping, optionally run `tools/quality_profile.py` to locate time reversals, duplicate-key candidates, record density and forward gaps. It preserves observations and does not identify why records are absent. Read the opt-in request and budget contract in [references/tool-contracts.md](references/tool-contracts.md); do not infer time units or duplicate semantics from column names.
+
 For IEEE 802.11 captures, read [references/wifi-analysis.md](references/wifi-analysis.md). For other radios or telemetry, use the semantic mapping rules in the measurement contract. Keep protocol-specific logic out of generic tools.
 
 ## 5. Construct comparable measurements
@@ -202,6 +204,8 @@ python -B "<skill_root>/tools/check_report_layout.py" --html results/diagnosis.h
 
 Before a report becomes a retained deliverable, freeze its ledger, referenced artifacts and renderer sources into a new directory with `python -B "<skill_root>/tools/snapshot_report.py" --ledger logs/evidence_ledger.json --output-dir results/frozen`. Use the packaged `skill/tools/write_report.py` and `ledger.json` for subsequent exports. New snapshots preserve skill instructions as `skill/skill_instructions.md`, with the path and original byte hash in the manifest. Leave existing snapshots, names and manifests intact. The snapshot preserves expected hashes and historical assessments; it does not certify a new export's layout. If a historical tool changed, supply an exact matching archived `--source-root`; never refresh an old expected hash to make validation pass. See [references/report-design.md](references/report-design.md).
 
+After moving a new frozen package, invoke its `reexport.py` with the chosen Python and `--output-dir <fresh_directory_outside_package>`. It checks packaged hashes and uses package-relative resources, retaining historical absolute commands as provenance. Inspect each new export separately.
+
 Organize the answer around the requested scope, measurement limits and supported results. For diagnosis, include prioritized explanations, counterevidence and discriminating next checks; for descriptive work, report the comparisons without manufacturing mechanisms. Report normal behavior or insufficient discrimination when that is the result. Keep effect magnitude, statistical evidence and practical importance separate.
 
 Use a short executive summary, readable analysis body and linked audit appendix. Keep important limitations, failed/null results and counterevidence in the body. Move repeated numerical checks, exact locators, hashes and execution metadata to the appendix. Number figures/tables consistently; keep table values tied to verified claims and declared units. Split dense plots and wide tables without omitting comparison objects. Do not impose fixed page, word or figure counts.
@@ -215,6 +219,8 @@ For reusable changes, run meaningful numerical, design-boundary and integrity re
 ```text
 python -B -m unittest discover -s "<skill_root>/tools" -p "test_*.py"
 ```
+
+When changing diagnostic behavior, use the small [benchmarks/README.md](benchmarks/README.md) acceptance set. Keep deterministic fixture checks separate from independent response review; it is a maintenance evaluation, not a required investigation step or a real-data root-cause accuracy score.
 
 ## Extension rule
 

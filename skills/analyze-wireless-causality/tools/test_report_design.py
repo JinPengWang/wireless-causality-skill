@@ -59,6 +59,12 @@ def presentation():
 
 
 class ReportDesignTests(unittest.TestCase):
+    def test_renderer_reuses_its_validated_numeric_result(self):
+        import evidence_model
+        with patch.object(evidence_model, 'verify_numeric_claims', wraps=evidence_model.verify_numeric_claims) as verify:
+            self.export()
+            self.assertEqual(verify.call_count, 1)
+
     def setUp(self):
         self.base = Path(tempfile.gettempdir())
         self.temp = tempfile.TemporaryDirectory(dir=self.base)
@@ -177,13 +183,13 @@ class ReportDesignTests(unittest.TestCase):
                 image_data(path)
 
     def test_changed_input_during_export_fails_before_write(self):
-        import write_report
-        original = write_report.numerical_checks
+        import evidence_model
+        original = evidence_model.numerical_checks
         def changed(report, base):
             result = original(report, base)
             write_json(self.root/'configuration.json', {'changed': True})
             return result
-        with patch.object(write_report, 'numerical_checks', side_effect=changed):
+        with patch.object(evidence_model, 'numerical_checks', side_effect=changed):
             with self.assertRaises(ValueError):
                 self.export()
         self.assertFalse((self.root/'diagnosis.html').exists())

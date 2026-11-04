@@ -151,6 +151,11 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
         resource_entries.append({'source_path': str(path.resolve()), 'snapshot_path': destination.as_posix(), 'sha256': digest})
 
     originals = list(_references(report))
+    # Current portable entry is independent of the historical renderer version.
+    launcher = Path(__file__).with_name('reexport_report.py').resolve()
+    launcher_digest = observe(launcher)
+    plan(launcher, Path('reexport.py'), launcher_digest)
+    resource_entries.append({'source_path': str(launcher), 'snapshot_path': 'reexport.py', 'sha256': launcher_digest})
     copies = list(_references(archived))
     canonical_paths, tool_paths = {}, {}
     for pointer, kind, artifact in originals:
@@ -239,6 +244,8 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
                 'snapshot_operation': invocation, 'artifacts': artifact_entries,
                 'explicit_configuration': explicit_configs,
                 'runtime_resources': resource_entries, 'reexport_commands': commands,
+                'portable_reexport': {'entrypoint': 'reexport.py', 'interpreter': 'explicitly selected current Python',
+                                      'output': 'fresh directory outside package', 'example': 'python -B reexport.py --output-dir ../new_export'},
                 'verification': {'original_inputs_unchanged': True, 'recorded_hashes_preserved': True,
                                  'ledger_validation': 'passed', 'visual_review': 'not_checked',
                                  'semantic_truth_verified_by_software': False}}

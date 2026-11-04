@@ -92,6 +92,14 @@ The package directory must not already exist. New packages save the source `SKIL
 
 Pass optional `--presentation logs/presentation.json` and `--theme logs/theme.json` when these settings are part of the export. The package preserves their bytes and records matching re-export arguments, so summary/table selection and theme do not depend on later edits to live configuration files. When recovering an old report, compare these explicit settings with its audit sidecar rather than assuming a file with a similar name is the original configuration.
 
+New packages also contain a standard-library `reexport.py` entry. After relocating the entire trusted package, use the desired installed Python:
+
+```text
+python -B "<moved-package>/reexport.py" --output-dir "<fresh-sibling-export-directory>"
+```
+
+Optional repeated `--format html`, `--format markdown`, or `--format json` selects exports (default all three). The entry verifies ledger, evidence, runtime and explicit-configuration hashes before invoking the packaged renderer with that Python. It does not use historical absolute execution paths, install dependencies or rerun original analyses. `reexport_commands` remains historical provenance. A new external directory preserves prior reports and sidecars, whose absolute audit context legitimately changes after relocation. After preflight succeeds, each export attempt records commands, exit codes and integrity status in the new `reexport_result.json`; exporter failures retain their diagnostic output. Failed preflight leaves no export directory. Hashes do not establish trust in archived executable code, and successful export does not establish new visual or semantic acceptance.
+
 Add new language, presentation or export adapters without changing the analysis model or dataset assumptions. Use fresh synthetic probes and unchanged semantic inputs to verify that a visual revision preserves evidence. Keep generated reports, screenshots, PDFs and browser profiles out of skill commits.
 
 Design references: [Cisco technical whitepaper](https://www.cisco.com/c/en/us/products/collateral/wireless/white-paper-c11-740788.pdf), [IBM Carbon typography](https://www.carbondesignsystem.com/building-blocks/foundations/typography/style-strategies). Browser implementation references: [Chrome DevTools protocol](https://chromedevtools.github.io/devtools-protocol/) and [Chrome Headless command line](https://developer.chrome.com/docs/automation-and-testing/headless-cli). Borrow reading hierarchy and consistency; do not copy corporate branding or scientific claims.

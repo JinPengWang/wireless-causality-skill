@@ -26,8 +26,8 @@ def render(report, base, output, ledger_path=None, presentation=None, output_for
     protected = protected_artifacts(report, base, ledger_path)+resources
     ensure_output_safe(output, protected, suffix[output_format])
     hashes = {str(Path(p).resolve()): sha256(p) for p in protected if Path(p).is_file()}
-    report = validate_evidence(report, base)
-    checks = numerical_checks(report, base)
+    checks = {}
+    report = validate_evidence(report, base, _numerical_results=checks)
     model = {'schema_version': 1, 'ledger_base': str(base.resolve()), 'ledger': report,
              'numerical_checks': checks, 'semantic_truth_verified_by_software': False}
     audit_path, audit_text = None, None

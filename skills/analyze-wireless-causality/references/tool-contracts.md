@@ -25,6 +25,7 @@ Do not rewrite historical requests to a different path base. Regression fixtures
 |---|---|---|
 | check_environment.py | optional expected interpreter prefix | interpreter and dependency versions; no mutation |
 | audit_workbooks.py | explicit XLSX paths; optional sheet/header row/sample limit | streaming profiles, missingness, examples and hashes; no semantic inference |
+| quality_profile.py | explicit table/time mapping, optional identity/key columns and bounded diagnostic settings | source-row examples, time-order issues, duplicate candidates, occupied-bin density and conditional forward gaps; no repair or missing-cause inference |
 | build_windows.py | versioned JSON mapping | normalized windows with metadata, coverage and source rows |
 | compare_runs.py | normalized window JSON; optional reference | duration-weighted or pooled-count per-run summaries and equal-pair contrasts |
 | detect_events.py | one selected series and threshold policy | excursions, integrated deficit and onset/recovery censoring |
@@ -35,6 +36,8 @@ Do not rewrite historical requests to a different path base. Regression fixtures
 | verify_claims.py | hashed artifacts, exact value locators, unit contracts and expressions | atomic numerical checks with explicit arithmetic/meaning boundaries |
 | evidence_model.py | v2/v3 ledger and artifacts | presentation-independent integrity, claim and completion checks |
 | snapshot_report.py | validated ledger, fresh package directory, optional exact historical renderer source root | immutable ledger/artifact/source package and path/hash mapping; instructions saved as skill_instructions.md in new packages; no recalculation or refresh of historical claims |
+| reexport_report.py / packaged reexport.py | trusted frozen package, current selected Python, fresh external output directory | hash-checked re-export from relative packaged resources; retains previous reports and audit sidecars |
+| diagnostic_benchmark.py | fresh external output directory | fixed blinded case inputs, deterministic reference calculations, hashes and an unfilled independent-review template |
 | write_report.py | validated ledger, optional presentation/table configuration and shared theme | JSON model or localized Markdown/offline HTML with summary, body and audit appendix; no fixed figure count |
 | check_report_layout.py | generated HTML, fresh check output, optional existing browser/previews/PDF | static/DOM layout checks and optional PDF export; actual visual review remains separately recorded |
 | test_tools.py / test_contracts.py / test_investigation.py / test_report_design.py | no private inputs | synthetic numerical, design-boundary, evidence, presentation and integrity checks |
@@ -42,6 +45,29 @@ Do not rewrite historical requests to a different path base. Regression fixtures
 Adapters for arbitrary free-text exports, cumulative counters, clock fitting, exact aggregate reconstruction, automatic BA matching, event-aligned overlays, causal designs beyond the declared paired backend and Tigramite execution are **not** silently supplied by these primitives. Implement the smallest missing adapter when required, or return an explicit unavailable capability. Do not imply the library is a fully automatic root-cause classifier.
 
 Workbook audit `mode` records requested full/sample scope, not success. Inspect sheet, workbook and top-level execution `status` (`completed`, `partial`, `failed`) and scan boundaries. Read issues remain in JSON with scanned data; any such issue makes the CLI nonzero. Explicit row-limited sampling is a completed sample when no read error occurs, with full-scan completion reported separately.
+
+## Optional mapped-source quality profile
+
+Use only after reviewing field meanings. Example request (paths follow cwd as in `build_windows`; use absolute raw paths):
+
+```json
+{
+  "schema_version": 1,
+  "source": {"path": "<absolute-table-path>", "header_row": 1},
+  "time": {"column": "clock_ms", "scale": 0.001, "origin": 0},
+  "identity_columns": ["device"],
+  "key_columns": ["record_id"],
+  "density_window_s": 1,
+  "gap_threshold_s": 2,
+  "max_examples": 20
+}
+```
+
+Run `python -B "<skill_root>/tools/quality_profile.py" --request logs/quality_request.json --output logs/quality_profile.json`. `source` optionally accepts `sheet` and exact `where` filters. Missing mapped headers fail before filtering. Time is `raw * scale - origin`; no units are inferred. Empty `identity_columns` gives a source-level profile. Blank identities are counted separately rather than pooled into a device. Key equality is type-sensitive within each identity; the adapter must define whether a repeated key represents a duplicate, retransmission or legitimate reuse.
+
+Density lists occupied half-open bins of selected valid-time observations. Omitted bins have no such records; this is not measured zero throughput, loss or proof of capture failure. Gaps are consecutive observed timestamp differences strictly above the configured threshold, assessed only with valid nondecreasing timestamps in the group. There is no inference about leading/trailing exposure. Time reversals/invalid times make the group's complete gap assessment unavailable. Example lists are capped, but counts remain exact. Duplicate counts are unavailable without key columns. The tool never removes observations or changes window aggregation.
+
+`max_groups` (default 10000), `max_keys` (100000) and `max_bins` (100000) bound retained state globally; exceeding them fails explicitly. Narrow the source/filter, coarsen the density window or choose a justified budget. These limits and thresholds are runtime choices, not radio constants. No automatic distinction between traffic reduction, capture omission, export filtering and acquisition termination is claimed.
 
 ## Window mapping v1
 

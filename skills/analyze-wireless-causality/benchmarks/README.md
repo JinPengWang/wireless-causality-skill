@@ -1,0 +1,14 @@
+# Diagnostic behavior benchmark v1
+
+This maintenance benchmark covers six small synthetic cases. It is not a mandatory analysis step and is not a validated measure of real-world diagnostic accuracy.
+
+1. Run `python -B "<skill_root>/tools/diagnostic_benchmark.py" --output-dir <fresh_external_directory>`. It writes hashed agent inputs, deterministic reference calculations and an unfilled review template. Keep reference results and `rubric.json` hidden from the responding agent.
+2. Give a fresh agent the current skill and `agent_input.json`. Ask it to answer each case using only those inputs and to identify any calculations it actually executes. It may use the tools; it must not read the reference/rubric or change the skill. Record the response verbatim, model/settings, tools, date and source revision/hash. Separate case sessions are preferred when measuring repeated performance; a single batch is only a smoke test.
+3. A separate reviewer applies `rubric.json` to the actual answers and evidence. Fill `review_template.json` with passed/failed/not_checked, response locators and reviewer identity. For a critical-failure check, passed means that the stated failure is absent; failed means it is present. Arithmetic checks and behavioral review are separate. Preserve failures and missing requested calculations. Do not silently treat unavailable review as a pass.
+4. For a before/after comparison, freeze the same inputs, rubric and model/tool settings, use fresh sessions and retain every run. Repeat enough times to expose response variance and report that variance. This repository does not invoke a paid model API or estimate token use from file sizes.
+
+The fixtures contain both insufficient-evidence cases and a known randomized positive case; an agent that always refuses to infer cannot pass all criteria. B01/B02 test measurement limits, B03 observation quality, B04 event timing/recovery, B05 competing bottlenecks, B06 a scoped effect with an exact randomization calculation. This is a small acceptance set, not a comprehensive benchmark.
+
+For label/filename variants, change labels together with mappings and compare numerical content after restoring identities. Source row locators should track their new locations. Permute only inputs whose contracts permit it: raw interval rows are required to be ordered; normalized records may be sorted by their adapter. A proper refusal of invalid input is a valid outcome. Future-predicts-past and hidden-confounding cases can be added later; reverse predictive gain is not a hard causal veto and missingness mechanisms cannot be inferred from absence alone.
+
+Review changes should preserve the public cases and version the set when semantics change. Private held-out cases and evaluator calibration are needed before treating scores as general performance claims.

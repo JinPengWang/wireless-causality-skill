@@ -85,10 +85,11 @@ def select(path, locator, cache):
         key = (path, locator.get('sheet'), header, tuple(rows), field)
         if key not in cache:
             found = {}
+            selected_rows, last_row = set(rows), max(rows)
             for row, values in table_rows(path, locator.get('sheet'), header, required_columns=[field]):
-                if row in rows:
+                if row in selected_rows:
                     found[row] = values[field]
-                if row >= max(rows):
+                if row >= last_row:
                     break
             if set(found) != set(rows):
                 raise ValueError('One or more selected table rows are absent')

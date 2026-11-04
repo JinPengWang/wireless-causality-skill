@@ -13,6 +13,7 @@ from common import read_json, sha256, write_json
 from check_report_layout import inspect_html
 from evidence_model import validate_evidence
 from snapshot_report import snapshot
+from reexport_report import reexport
 
 
 SKILL = Path(__file__).resolve().parents[1]
@@ -106,6 +107,30 @@ class ReportSnapshotTests(unittest.TestCase):
             result = subprocess.run(command, cwd=self.root, capture_output=True, text=True, encoding='utf-8')
             self.assertEqual(result.returncode, 0, result.stderr)
 
+    def test_portable_export_after_moving_package_and_removing_original_paths(self):
+        snapshot(self.ledger, self.output, skill_root=self.skill)
+        self.assertEqual(self.export(self.output/'skill', self.output/'ledger.json', self.output/'old.html').returncode, 0)
+        moved = self.root/'moved 中文 package'
+        self.output.rename(moved)
+        self.data.rename(self.root/'old_data'); self.skill.rename(self.root/'old_source')
+        before = tree_hashes(moved)
+        command = [sys.executable, '-B', '-X', 'utf8', str(moved/'reexport.py'),
+                   '--output-dir', str(self.root/'new exports')]
+        result = subprocess.run(command, cwd=self.root, capture_output=True, text=True, encoding='utf-8')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for name in ['report.html','report.md','report.json']:
+            self.assertTrue((self.root/'new exports'/name).is_file())
+        self.assertEqual(inspect_html(self.root/'new exports'/'report.html')[0]['errors'], [])
+        self.assertEqual(tree_hashes(moved), before)
+        # Existing exports and damaged evidence must be refused.
+        self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+        manifest = read_json(moved/'snapshot_manifest.json')
+        damaged = moved/manifest['artifacts'][0]['snapshot_path']
+        damaged.write_bytes(damaged.read_bytes()+b' ')
+        command[-1] = str(self.root/'bad export')
+        self.assertNotEqual(subprocess.run(command, capture_output=True).returncode, 0)
+        self.assertFalse((self.root/'bad export').exists())
+
     def test_resnapshot_retains_archived_instructions_and_leaves_old_package_unchanged(self):
         instructions = self.skill/'skill_instructions.md'
         instructions.write_text('Previously archived instruction bytes.\n', encoding='utf-8')
@@ -118,6 +143,20 @@ class ReportSnapshotTests(unittest.TestCase):
         self.assertEqual((newer/'skill'/'skill_instructions.md').read_bytes(), instructions.read_bytes())
         self.assertEqual(list(newer.rglob('SKILL.md')), [])
         self.assertEqual(read_json(self.output/'snapshot_manifest.json'), old)
+
+    def test_portable_export_rejects_escaping_resources_and_nested_output(self):
+        snapshot(self.ledger, self.output, skill_root=self.skill)
+        before = tree_hashes(self.output)
+        with self.assertRaisesRegex(ValueError, 'outside'):
+            reexport(self.output, self.output/'nested')
+        self.assertEqual(tree_hashes(self.output), before)
+        manifest = read_json(self.output/'snapshot_manifest.json')
+        manifest['artifacts'].append({'snapshot_path':'../data/measurements.json',
+                                      'sha256':sha256(self.data/'measurements.json')})
+        write_json(self.output/'snapshot_manifest.json', manifest)
+        with self.assertRaisesRegex(ValueError, 'escapes'):
+            reexport(self.output, self.root/'bad export')
+        self.assertFalse((self.root/'bad export').exists())
 
     def test_snapshot_reexports_after_original_tools_change_and_keeps_history(self):
         original_html = self.data/'original.html'
@@ -252,6 +291,18 @@ class ReportSnapshotTests(unittest.TestCase):
         self.assertEqual(audit['presentation']['presentation'], options)
         self.assertEqual(audit['presentation']['theme']['body_px'], 18)
         self.assertEqual(inspect_html(self.output/'report.html')[0]['errors'], [])
+        moved = self.root/'moved configured package'
+        self.output.rename(moved)
+        self.data.rename(self.root/'unavailable_original_data')
+        before = tree_hashes(moved)
+        fresh = self.root/'configured_export'
+        result = reexport(moved, fresh, ('html',))
+        self.assertTrue(result['package_inputs_unchanged'])
+        self.assertEqual(len(result['exports']), 1)
+        audit = read_json(fresh/'report.audit.json')
+        self.assertEqual(audit['presentation']['presentation'], options)
+        self.assertEqual(audit['presentation']['theme']['body_px'], 18)
+        self.assertEqual(tree_hashes(moved), before)
 
     def test_source_drift_during_validation_refuses_publication(self):
         import snapshot_report
