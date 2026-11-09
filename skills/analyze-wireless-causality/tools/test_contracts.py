@@ -231,6 +231,32 @@ class ContractTests(unittest.TestCase):
         self.assertEqual(result['condition_contrasts'][0]['target_minus_reference'], -2)
         self.assertEqual(result['pair_contrasts'][0]['pair_id'], 'p')
 
+    def test_pair_support_includes_missing_runs_in_the_registered_denominator(self):
+        runs = [{**self.windows([value])[0], 'run_id': entity+pair, 'entity': entity, 'pair_id': pair}
+                for entity in ['A', 'B'] for pair, value in [('p1', 10.), ('p2', None)]]
+        row = paired_compare(summarize(runs), 'A')[0]
+        self.assertEqual(row['n_pairs'], 1)
+        self.assertEqual(row['reference_support_fraction'], 1.)
+        for side, entity in [('reference', 'A'), ('target', 'B')]:
+            cohort = row[side+'_cohort']
+            self.assertEqual((cohort['registered_runs'], cohort['analyzable_runs'], cohort['matched_runs']), (2, 1, 1))
+            self.assertEqual(cohort['matched_fraction_of_registered_runs'], .5)
+            self.assertEqual(cohort['excluded_before_matching'][0]['run_id'], entity+'p2')
+            self.assertEqual(cohort['excluded_before_matching'][0]['reasons'], ['no_valid_mean'])
+
+    def test_wholly_ineligible_family_and_unknown_pair_keep_exclusion_reasons(self):
+        a = summarize(self.windows([None]))[0]
+        b = {**a, 'entity': 'B', 'run_id': 'b', 'pair_id': 'unknown'}
+        row = paired_compare([a, b], 'A')[0]
+        self.assertEqual(row['status'], 'blocked_no_eligible_pairs')
+        self.assertIsNone(row['mean_target_minus_reference'])
+        self.assertEqual(row['target_cohort']['matched_fraction_of_registered_runs'], 0.)
+        self.assertEqual(row['target_cohort']['excluded_before_matching'][0]['reasons'],
+                         ['no_valid_mean', 'unknown_pair_id'])
+        blocked = paired_compare([b], 'B')[0]
+        self.assertEqual(blocked['status'], 'blocked_no_eligible_pairs')
+        self.assertEqual(blocked['cohorts'][0]['excluded_before_matching'], row['target_cohort']['excluded_before_matching'])
+
     def test_inconsistent_normalized_value_is_rejected(self):
         rows = self.windows([10])
         rows[0].update(aggregation_numerator=2, aggregation_denominator=1, scale=1)

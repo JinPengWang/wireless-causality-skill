@@ -77,9 +77,9 @@ class ReportSnapshotTests(unittest.TestCase):
             raise RuntimeError('Unexpected cleanup target')
         self.temp.cleanup()
 
-    def export(self, skill, ledger, output):
+    def export(self, skill, ledger, output, *extra_args):
         return subprocess.run([sys.executable, '-B', '-X', 'utf8', str(skill/'tools'/'write_report.py'),
-                               '--ledger', str(ledger), '--output', str(output), '--format', 'html'],
+                               '--ledger', str(ledger), '--output', str(output), '--format', 'html', *extra_args],
                               capture_output=True, text=True, encoding='utf-8')
 
     def test_new_snapshot_preserves_instructions_without_a_skill_entry(self):
@@ -269,17 +269,33 @@ class ReportSnapshotTests(unittest.TestCase):
     def test_explicit_presentation_and_theme_remain_usable_after_original_config_changes(self):
         presentation = self.data/'presentation.json'
         theme = self.data/'theme.json'
-        options = {'schema_version': 1, 'language': 'en', 'summary_ids': ['P1'],
+        self.report['phenomena'][0]['figures'][0]['id'] = 'signal'
+        write_json(self.ledger, self.report)
+        options = {'schema_version': 2, 'language': 'en', 'summary_ids': ['P1'],
                    'item_titles': {'P1': 'Selected archived heading'},
+                   'readings': {'figure:signal': 'Review the synthetic trace.',
+                                'table:T1': 'Only the synthetic run was observed.'},
                    'tables': [{'id': 'T1', 'owner': 'P1', 'title': 'Archived table', 'note': 'Synthetic comparison',
                                'columns': [{'label': 'Run'}, {'label': 'Rate', 'unit': 'Mbit/s'}],
                                'rows': [['A', {'claim_id': 'C1'}]]}]}
         write_json(presentation, options)
         write_json(theme, {'body_px': 18})
+        original = self.data/'original.html'
+        export = self.export(self.skill, self.ledger, original, '--presentation', str(presentation), '--theme', str(theme))
+        self.assertEqual(export.returncode, 0, export.stderr)
+        sidecar = self.data/'original.audit.json'
         before = tree_hashes(self.data)
+        # Each omission silently chose defaults in the older documented workflow.
+        for present, style in [(None, theme), (presentation, None)]:
+            with self.subTest(present=present, style=style), self.assertRaisesRegex(ValueError, 'Reader settings'):
+                snapshot(self.ledger, self.output, skill_root=self.skill, presentation_path=present,
+                         theme_path=style, export_audit_path=sidecar)
+            self.assertFalse(self.output.exists())
         manifest = snapshot(self.ledger, self.output, skill_root=self.skill,
-                            presentation_path=presentation, theme_path=theme)
+                            presentation_path=presentation, theme_path=theme, export_audit_path=sidecar)
         self.assertEqual(tree_hashes(self.data), before)
+        self.assertEqual(manifest['source_reader_edition']['audit_sha256'], sha256(sidecar))
+        self.assertEqual(manifest['source_reader_edition']['status'], 'matched')
         for config in manifest['explicit_configuration']:
             self.assertEqual(sha256(self.output/config['snapshot_path']), config['sha256'])
             self.assertEqual(config['historical_authentication'], 'not_established_by_snapshot')
@@ -296,13 +312,55 @@ class ReportSnapshotTests(unittest.TestCase):
         self.data.rename(self.root/'unavailable_original_data')
         before = tree_hashes(moved)
         fresh = self.root/'configured_export'
-        result = reexport(moved, fresh, ('html',))
+        result = reexport(moved, fresh, ('html', 'markdown'))
         self.assertTrue(result['package_inputs_unchanged'])
-        self.assertEqual(len(result['exports']), 1)
+        self.assertTrue(result['source_reader_settings_match'])
+        original_html = (self.root/'unavailable_original_data'/'original.html').read_text(encoding='utf-8')
+        for text in [original_html, (fresh/'report.html').read_text(encoding='utf-8'),
+                     (fresh/'report.md').read_text(encoding='utf-8')]:
+            for landmark in ['Selected archived heading', 'Archived table', *options['readings'].values()]:
+                self.assertIn(landmark, text)
         audit = read_json(fresh/'report.audit.json')
         self.assertEqual(audit['presentation']['presentation'], options)
         self.assertEqual(audit['presentation']['theme']['body_px'], 18)
         self.assertEqual(tree_hashes(moved), before)
+        # Simulate a launcher losing its archived options even though its renderer succeeds.
+        manifest['explicit_configuration'] = []
+        write_json(moved/'snapshot_manifest.json', manifest)
+        incomplete = self.root/'defaulted_export'
+        with self.assertRaisesRegex(ValueError, 'Re-export failed'):
+            reexport(moved, incomplete, ('html',))
+        failed = read_json(incomplete/'reexport_result.json')
+        self.assertEqual(failed['exports'][0]['exit_code'], 0)
+        self.assertIs(failed['source_reader_settings_match'], False)
+
+    def test_audit_rejects_different_ledger_and_accepts_an_original_default_edition(self):
+        result = self.export(self.skill, self.ledger, self.data/'plain.html')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        sidecar = self.data/'plain.audit.json'
+        args = dict(skill_root=self.skill, export_audit_path=sidecar)
+        alternate = self.data/'alternate.json'
+        write_json(alternate, {**self.report, 'title': 'A different edition'})
+        with self.assertRaisesRegex(ValueError, 'different ledger'):
+            snapshot(alternate, self.output, **args)
+        self.assertFalse(self.output.exists())
+        manifest = snapshot(self.ledger, self.output, **args)
+        self.assertEqual(manifest['source_reader_edition']['status'], 'matched')
+        self.assertEqual(manifest['explicit_configuration'], [])
+
+    def test_current_package_keeps_only_ledger_referenced_tests_and_reexports(self):
+        referenced = SKILL/'tools'/'test_contracts.py'
+        self.report['provenance']['artifacts'].append({'role': 'tool', 'path': str(referenced),
+                                                     'sha256': sha256(referenced)})
+        write_json(self.ledger, self.report)
+        snapshot(self.ledger, self.output)
+        archived_tests = sorted(p.name for p in (self.output/'skill'/'tools').glob('test_*.py'))
+        self.assertEqual(archived_tests, [referenced.name])
+        self.assertTrue(reexport(self.output, self.root/'lean_export', ('html',))['package_inputs_unchanged'])
+        # Preserve the broad dependency policy for an explicitly recovered renderer.
+        historical = self.root/'historical_package'
+        snapshot(self.ledger, historical, source_root=SKILL)
+        self.assertTrue((historical/'skill'/'tools'/'test_report_snapshot.py').is_file())
 
     def test_source_drift_during_validation_refuses_publication(self):
         import snapshot_report

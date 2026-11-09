@@ -46,6 +46,8 @@ Adapters for arbitrary free-text exports, cumulative counters, clock fitting, ex
 
 Workbook audit `mode` records requested full/sample scope, not success. Inspect sheet, workbook and top-level execution `status` (`completed`, `partial`, `failed`) and scan boundaries. Read issues remain in JSON with scanned data; any such issue makes the CLI nonzero. Explicit row-limited sampling is a completed sample when no read error occurs, with full-scan completion reported separately.
 
+XLSX tools stream the actual worksheet rows. The audit preserves the exporter’s `declared_rows` and `declared_columns` as metadata and lists axes where scanned data exceed those bounds in `scan.scanned_data_beyond_declared_bounds`. An empty list describes only the scanned portion. A header-only table is valid; a sheet with no usable header fails. Empty formatting beyond the table is ignored, trailing missing values remain null, and a populated cell beyond the named headers raises a read error at its physical row.
+
 ## Optional mapped-source quality profile
 
 Use only after reviewing field meanings. Example request (paths follow cwd as in `build_windows`; use absolute raw paths):
@@ -66,6 +68,8 @@ Use only after reviewing field meanings. Example request (paths follow cwd as in
 Run `python -B "<skill_root>/tools/quality_profile.py" --request logs/quality_request.json --output logs/quality_profile.json`. `source` optionally accepts `sheet` and exact `where` filters. Missing mapped headers fail before filtering. Time is `raw * scale - origin`; no units are inferred. Empty `identity_columns` gives a source-level profile. Blank identities are counted separately rather than pooled into a device. Key equality is type-sensitive within each identity; the adapter must define whether a repeated key represents a duplicate, retransmission or legitimate reuse.
 
 Density lists occupied half-open bins of selected valid-time observations. Omitted bins have no such records; this is not measured zero throughput, loss or proof of capture failure. Gaps are consecutive observed timestamp differences strictly above the configured threshold, assessed only with valid nondecreasing timestamps in the group. There is no inference about leading/trailing exposure. Time reversals/invalid times make the group's complete gap assessment unavailable. Example lists are capped, but counts remain exact. Duplicate counts are unavailable without key columns. The tool never removes observations or changes window aggregation.
+
+Density and measurement windows share the same decimal-boundary normalization. For example, with a width of 0.1 s, a timestamp of 0.3 s belongs to bin 3 in both tools.
 
 `max_groups` (default 10000), `max_keys` (100000) and `max_bins` (100000) bound retained state globally; exceeding them fails explicitly. Narrow the source/filter, coarsen the density window or choose a justified budget. These limits and thresholds are runtime choices, not radio constants. No automatic distinction between traffic reduction, capture omission, export filtering and acquisition termination is claimed.
 
@@ -101,7 +105,7 @@ See [causal-investigation.md](causal-investigation.md) for the normalized record
 
 See [evidence-claims.md](evidence-claims.md) for atomic numeric claims, table/JSON locators, expression/unit rules, v3 assessment/provenance fields, legacy v2 support and separate report exporters. Evidence hashes, calculation checks and semantic/causal review have distinct meanings. Images are optional; if included they still require integrity and readability checks. New work uses ledger schema_version=3. Existing v2 reports remain readable with numerical verification explicitly not performed.
 
-See [report-design.md](report-design.md) for presentation schema v1, shared theme/plot rules, source protection, table splitting/rounding and the browser/manual layout-review boundary. Browser rendering is optional and uses an existing Chromium executable plus optional websocket-client; the exporter does not install a browser or weaken its sandbox. Preserve analysis/evidence content across presentation changes.
+See [report-design.md](report-design.md) for presentation v2 visual IDs, per-visual readings, cross-references, v1 compatibility, shared themes, source protection, table formatting and layout review. Browser rendering is optional and uses an existing Chromium executable plus optional websocket-client. Preserve analysis and evidence across presentation changes.
 
 Run all regression cases from `run_root` with `python -B -m unittest discover -s "<skill_root>/tools" -p "test_*.py"`. A platform-denied hardlink integration test is reported as skipped, not passed. Keep runtime artifacts out of commits and do not claim a test ran merely because a planned check appears in a template.
 

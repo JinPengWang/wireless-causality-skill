@@ -1,6 +1,7 @@
 """Evidence-preservation and presentation-boundary regressions; synthetic only."""
 import copy
 import json
+import re
 import tempfile
 import unittest
 from pathlib import Path
@@ -76,10 +77,116 @@ class ReportDesignTests(unittest.TestCase):
             raise RuntimeError('Unexpected cleanup target')
         self.temp.cleanup()
 
-    def export(self, fmt='html', options=None):
-        path = self.root/('diagnosis.'+('md' if fmt == 'markdown' else fmt))
+    def export(self, fmt='html', options=None, basename='diagnosis'):
+        path = self.root/(basename+'.'+('md' if fmt == 'markdown' else fmt))
         render(self.report, self.root, path, presentation=presentation() if options is None else options, output_format=fmt)
         return path
+
+    def illustrated_presentation(self):
+        item = self.report['phenomena'][0]
+        item['statement'] = 'Compare {{figure:retry}} with {{table:T1}}.'
+        for identity, caption in [('phase', 'Phase observations compared with {{figure:retry}}.'),
+                                  ('retry', 'Retry observations.')]:
+            path = self.root/(identity+'.svg')
+            path.write_text('<svg xmlns="http://www.w3.org/2000/svg"><title>'+identity+'</title></svg>', encoding='utf-8')
+            item['figures'].append({'id': identity, 'path': path.name, 'sha256': sha256(path), 'caption': caption})
+        options = presentation()
+        options.update(schema_version=2, readings={
+            'figure:phase': 'Sparse phase observations. Compare {{figure:retry}}.',
+            'figure:retry': 'Interpret the <em>retry flag</em> within its observed population.',
+            'table:T1': 'Read the full-run values separately from {{figure:phase}}.'})
+        return options
+
+    @staticmethod
+    def visible_body(text, fmt):
+        # Ignore link markup when checking the reader-visible target and sequence.
+        if fmt == 'html':
+            return re.sub(r'<[^>]+>', '', text.split('<main>', 1)[1].split('<h2 id="appendix">', 1)[0])
+        return re.sub(r'\[([^\]]+)\]\(#[^)]+\)', r'\1', text.split('## Audit appendix', 1)[0])
+
+    def test_references_and_neighboring_readings_follow_reordered_figures(self):
+        options = self.illustrated_presentation()
+        figures = self.report['phenomena'][0]['figures']
+        for order, phase_num, retry_num in [('original', 1, 2), ('reordered', 2, 1)]:
+            if order == 'reordered':
+                figures.reverse()
+            for fmt in ['html', 'markdown']:
+                with self.subTest(order=order, fmt=fmt):
+                    text = self.export(fmt, options, order).read_text(encoding='utf-8')
+                    body = self.visible_body(text, fmt)
+                    self.assertNotIn('{{', body)
+                    self.assertIn(f'Compare Figure {retry_num} with Table 1.', body)
+                    phase = f'Figure {phase_num}. Phase observations compared with Figure {retry_num}.'
+                    retry = f'Figure {retry_num}. Retry observations.'
+                    phase_reading = f'Sparse phase observations. Compare Figure {retry_num}.'
+                    table_reading = f'Read the full-run values separately from Figure {phase_num}.'
+                    landmarks = ['Table 1. Observed delivery', table_reading]
+                    for identity in [figure['id'] for figure in figures]:
+                        landmarks.extend([phase, phase_reading] if identity == 'phase' else [retry, 'Interpret the '])
+                    positions = [body.index(mark) for mark in landmarks]
+                    self.assertEqual(positions, sorted(positions))
+                    self.assertNotIn('<em>retry flag</em>', text)
+                    self.assertIn('retry flag', body)
+
+    def test_split_table_has_one_reading_and_references_its_first_part(self):
+        options = presentation()
+        wide = options['tables'][0]
+        following = dict(wide, id='peer', title='Peer summary')
+        options['tables'].append(following)
+        metrics = load_theme()['table_columns']
+        wide['columns'] = [wide['columns'][0]]+[{'label': f'Rate {i}', 'unit': 'Mbit/s'} for i in range(metrics)]
+        wide['rows'] = [['A']+[{'claim_id': 'C1'} for _ in range(metrics)]]
+        options.update(schema_version=2, readings={'table:T1': 'Wide results share a denominator.',
+                                                   'table:peer': 'Only the matched peer is shown.'})
+        self.report['phenomena'][0]['statement'] = 'Consult {{table:T1}} and {{table:peer}}.'
+        for fmt in ['html', 'markdown']:
+            with self.subTest(fmt=fmt):
+                body = self.visible_body(self.export(fmt, options).read_text(encoding='utf-8'), fmt)
+                self.assertIn('Consult Table 1 and Table 3.', body)
+                self.assertIn('Table 2. Observed delivery', body)
+                reading = 'Wide results share a denominator.'
+                self.assertEqual(body.count(reading), 1)
+                self.assertLess(body.index('Table 1. Observed delivery'), body.index(reading))
+                self.assertLess(body.index(reading), body.index('Table 3. Peer summary'))
+
+    def test_invalid_visual_ids_readings_and_references_rejected(self):
+        options = self.illustrated_presentation()
+        readings = options['readings']
+        item = self.report['phenomena'][0]
+        figure = item['figures'][0]
+        for missing in ['figure:phase', 'table:T1']:
+            partial = {k: v for k, v in readings.items() if k != missing}
+            with self.subTest(missing=missing), self.assertRaises(ValueError):
+                self.export(options={**options, 'readings': partial})
+        for target, key, value in [
+            (readings, 'table:T1', '  '),
+            (readings, 'figure:absent', 'Orphan interpretation'),
+            (readings, 'table:T1', 'See {{figure:absent}}.'),
+            (item, 'statement', 'See {{table:absent}}.'),
+            (figure, 'caption', 'See {{figure:absent}}.'),
+        ]:
+            with self.subTest(key=key, value=value), patch.dict(target, {key: value}), self.assertRaises(ValueError):
+                self.export(options=options)
+        anonymous = {k: v for k, v in figure.items() if k != 'id'}
+        other = dict(item, id='P2', figures=[figure.copy()])
+        with patch.dict(item, figures=[anonymous, item['figures'][1]]), self.assertRaises(ValueError):
+            self.export(options=options)
+        with patch.dict(self.report, phenomena=[item, other]), self.assertRaises(ValueError):
+            self.export(options=options)
+        self.assertFalse((self.root/'diagnosis.html').exists())
+
+    def test_empty_visual_set_and_legacy_figures_without_ids(self):
+        self.export(options={'schema_version': 2, 'readings': {}}, basename='no-visuals')
+        self.illustrated_presentation()
+        item = self.report['phenomena'][0]
+        item['statement'] = 'Historical observations.'
+        for figure in item['figures']:
+            del figure['id']
+            figure['caption'] = 'Historical observations.'
+        for name, options in [('v1', presentation()), ('unspecified', {})]:
+            with self.subTest(name=name):
+                text = self.export(options=options, basename=name).read_text(encoding='utf-8')
+                self.assertIn('Figure 2. Historical observations.', text)
 
     def test_numeric_audit_is_separate_but_all_claims_reachable(self):
         p = self.export()

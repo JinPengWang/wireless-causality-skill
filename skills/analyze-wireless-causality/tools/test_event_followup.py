@@ -72,6 +72,19 @@ class EventFollowupTests(unittest.TestCase):
         self.assertIsNone(response['onset_window'])
         self.assertTrue(response['right_censored'])
 
+    def test_gap_before_anchor_censors_timing_but_retains_first_observed_bin(self):
+        for offset in [0., 1e9]:
+            with self.subTest(offset=offset):
+                request, data = fixture([(0., 1., 1.), (1., 4., 10.)], offset=offset)
+                data['windows'][0]['end_s'] = offset - 1.
+                response = analyze(request, data)['event_signal_results'][0]['response']
+                self.assertEqual(response['status'], 'observed_threshold_excursion')
+                self.assertEqual(response['onset_window']['window_start_s'], offset)
+                self.assertEqual(response['followup']['status'], 'complete')
+                self.assertTrue(response['left_or_gap_censored'])
+                self.assertIsNone(response['lag_bounds_s'])
+                self.assertIsNone(response['strictly_after_anchor'])
+
     def test_only_windows_after_followup_do_not_count_as_observed(self):
         response = result([(5., 6., 10.)])['response']
         self.assertEqual(response['status'], 'not_assessable')

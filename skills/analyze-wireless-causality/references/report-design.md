@@ -32,7 +32,15 @@ Use matching language for figure labels. Built-in plot labels cover English and 
 
 ## Presentation configuration and claim-backed tables
 
-Start from `assets/report/presentation.template.json`. Schema version 1 supports:
+Start new reader editions from `assets/report/presentation.template.json` (presentation schema version 2). Give each displayed ledger figure a stable `id` and retain the existing logical `id` on each authored table. IDs use ASCII letters, digits, underscores and hyphens and must be unique within each kind across the report. Preserve them in run-specific adapters. Version 1 presentations and legacy calls without a presentation retain their existing export behavior. The evidence ledger uses its own schema version.
+
+For every figure and logical table, supply a plain-text paragraph in `readings`, keyed by `figure:<id>` or `table:<id>`. It will appear beside the visual in the reader edition. A grouped multi-panel figure can direct the reader to individual panels in a single reading. In a series of reference plots, describe the shared method once and give each separately displayed figure a short pointer to its own data. Use a stable reference such as `{{figure:delivery_by_condition}}` or `{{table:delivery}}` in reader prose, captions and readings. Numbering follows the final display order. A reference to a wide table identifies its first part.
+
+Write the reading in the report language. Point to the particular curve, panel, row or cells that answer the question. Describe the main comparison, its relevance to the investigation and any exception, sparse support or timing limit that changes the interpretation. If no consistent difference is visible, say so. Keep measurement definitions in the caption or note. Explain colors, symbols and line styles on the figure or in its caption. Tie quantitative statements in the reading to the owning item's evidence and verified claims.
+
+At the final display size, find the described marks or cells, check the legend and look for visible counterexamples. Verify the endpoint and time range that support each comparison. A reader should be able to distinguish an observation from a proposed explanation using the visual and its adjacent text. The exporter checks coverage and resolves cross-references. Record the result of the substantive visual and text comparison in the report review.
+
+Other presentation settings include:
 
 - `language`: must agree with the ledger; custom languages also provide all `labels` keys in `report_labels.EN`.
 - `summary_ids`: distinct existing phenomenon/finding IDs, chosen for relevance.
@@ -43,10 +51,11 @@ Example (replace IDs and wording with actual supported items):
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "language": "en",
   "summary_ids": ["P1"],
   "item_titles": {"P1": "Delivery comparison"},
+  "readings": {"table:delivery": "The delivery column records a result for recording A alone. Comparing devices requires a corresponding recording under the same condition."},
   "tables": [{
     "id": "delivery",
     "owner": "P1",
@@ -83,14 +92,16 @@ The renderer records theme, presentation settings and resource hashes in the aud
 Freeze retained runs before later source edits. `snapshot_report.py` creates a fresh directory with a ledger copy, referenced artifacts, renderer source tree and `snapshot_manifest.json`. It remaps paths while preserving expected artifact hashes, numerical claims and historical assessments. Export from the packaged renderer so its HTML source manifest refers to stable archived resources rather than a mutable checkout:
 
 ```text
-python -B "<skill_root>/tools/snapshot_report.py" --ledger logs/evidence_ledger.json --output-dir results/frozen
-python -B results/frozen/skill/tools/write_report.py --ledger results/frozen/ledger.json --format html --output results/frozen/diagnosis.html
-python -B "<skill_root>/tools/check_report_layout.py" --html results/frozen/diagnosis.html --output logs/frozen_layout_checks.json --static-only
+python -B "<skill_root>/tools/snapshot_report.py" --ledger logs/evidence_ledger.json --presentation logs/presentation.json --export-audit results/diagnosis.audit.json --output-dir results/frozen
+python -B results/frozen/reexport.py --output-dir results/reexported --format html
+python -B "<skill_root>/tools/check_report_layout.py" --html results/reexported/report.html --output logs/frozen_layout_checks.json --static-only
 ```
 
 The package directory must not already exist. New packages save the source `SKILL.md` bytes as `skill/skill_instructions.md`, with the correct new path and unchanged hash in the manifest; an already archived `skill_instructions.md` is also retained when snapshotting again. This preserves instruction evidence without creating another skill entry. Keep packages outside skill-discovery directories and leave existing packages, filenames, manifests and expected hashes unchanged. Missing/changed source or numerical artifacts are rejected. `--skill-root` identifies the original renderer tree; optional `--source-root` supplies an archived tree with exact expected tool bytes for historical recovery. A historical snapshot must still match every recorded tool hash; this is not permission to update expected hashes or to waive evidence validation. Preserve the original ledger/report and the snapshot's path mapping. Old visual/semantic review records remain historical records; perform and record checks for each new export separately. Snapshot creation neither executes archived scripts nor installs dependencies.
 
-Pass optional `--presentation logs/presentation.json` and `--theme logs/theme.json` when these settings are part of the export. The package preserves their bytes and records matching re-export arguments, so summary/table selection and theme do not depend on later edits to live configuration files. When recovering an old report, compare these explicit settings with its audit sidecar rather than assuming a file with a similar name is the original configuration.
+Pass the original `--presentation` and any `--theme` override to the snapshot. Supply the original reading edition's `<basename>.audit.json` with `--export-audit` so a mismatched ledger, missing presentation or different effective theme fails before publication. For the default presentation, omit `--presentation` on both the original export and the snapshot. The manifest records the audit hash and the comparison result. Portable re-export reapplies the archived files and checks the settings recorded in the new reading edition's sidecar. This check covers ledger and configuration consistency; inspect tables, readings and layout in the final output. A ledger-only snapshot remains possible when no source reading edition is available; its `source_reader_edition.status` is `not_checked`.
+
+New snapshots of the current renderer package their runtime tools and explicitly referenced evidence. Maintenance `test_*.py` files enter only when the ledger references them. Alternate or explicitly recovered renderer trees retain their complete top-level Python source for compatibility.
 
 New packages also contain a standard-library `reexport.py` entry. After relocating the entire trusted package, use the desired installed Python:
 

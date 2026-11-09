@@ -18,6 +18,12 @@ def digest(path):
     return h.hexdigest()
 
 
+def settings_digest(presentation, theme):
+    payload = json.dumps([presentation, theme], ensure_ascii=False, sort_keys=True,
+                         separators=(',', ':'), allow_nan=False).encode('utf-8')
+    return hashlib.sha256(payload).hexdigest()
+
+
 def reexport(root, output, formats=('html','markdown','json')):
     root=Path(root).resolve(); target=Path(output)
     if target.exists() or target.is_symlink(): raise ValueError('Use a fresh export directory')
@@ -52,6 +58,8 @@ def reexport(root, output, formats=('html','markdown','json')):
         configuration.extend(['--'+entry['usage'], str(located(entry['snapshot_path']))])
     target.parent.mkdir(parents=True,exist_ok=True); target.mkdir()
     runs=[]
+    expected_settings = manifest.get('source_reader_edition', {}).get('settings_sha256')
+    reader_settings_match = None
     for fmt in formats:
         suffix={'html':'html','markdown':'md','json':'json'}[fmt]
         command=[sys.executable,'-B','-X','utf8',str(renderer),'--ledger',str(located(ledger['path'])),
@@ -59,11 +67,24 @@ def reexport(root, output, formats=('html','markdown','json')):
         completed=subprocess.run(command, cwd=root, capture_output=True, text=True, encoding='utf-8')
         runs.append({'argv':command,'exit_code':completed.returncode,'stdout':completed.stdout,'stderr':completed.stderr})
         if completed.returncode: break
+        if expected_settings is not None and fmt in {'html', 'markdown'}:
+            audit_file = target/'report.audit.json'
+            try:
+                with audit_file.open(encoding='utf-8') as stream:
+                    trace = json.load(stream)['presentation']
+                reader_settings_match = settings_digest(trace['presentation'], trace['theme']) == expected_settings
+            except (OSError, ValueError, KeyError, TypeError) as exc:
+                reader_settings_match = False
+                runs[-1]['reader_audit_error'] = str(exc)
+            if not reader_settings_match:
+                break
     unchanged=digest(manifest_path)==manifest_hash and all(p.is_file() and digest(p)==h for p,h in hashes.items())
     result={'exports':runs,'package_inputs_unchanged':unchanged,'visual_review':'not_checked',
+            'source_reader_settings_match': reader_settings_match,
             'scope':'Frozen evidence and renderer re-export only; original analysis is not rerun.'}
     (target/'reexport_result.json').write_text(json.dumps(result,ensure_ascii=False,indent=2)+'\n',encoding='utf-8')
-    if not unchanged or any(r['exit_code'] for r in runs): raise ValueError('Re-export failed; see reexport_result.json')
+    if not unchanged or reader_settings_match is False or any(r['exit_code'] for r in runs):
+        raise ValueError('Re-export failed; see reexport_result.json')
     return result
 
 

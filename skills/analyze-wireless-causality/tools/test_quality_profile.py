@@ -3,6 +3,7 @@ import csv
 import tempfile
 import unittest
 from pathlib import Path
+from build_windows import build
 from common import sha256
 from quality_profile import profile
 
@@ -38,6 +39,25 @@ class QualityProfileTests(unittest.TestCase):
         self.assertEqual(a['adjacent_equal_times']['count'], 1)
         self.assertEqual(a['invalid_times']['count'], 1)
         self.assertEqual(a['forward_gaps']['status'], 'unavailable')
+
+    def test_decimal_density_bins_match_event_windows_on_both_sides_of_zero(self):
+        times = [-.300000001, -.3, -.299999999, .299999999, .3, .300000001]
+        request = self.request([[t, 'device', i] for i, t in enumerate(times)])
+        request['time']['scale'] = 1
+        request['density_window_s'] = .1
+        density = profile(request)['groups'][0]['density']
+
+        source = {'path': str(self.path), 'capture_complete': True,
+                  'metadata': {'run_id': 'r', 'entity': 'device', 'direction': 'uplink',
+                               'condition': 'synthetic', 'pair_id': 'p'},
+                  'time': {'start': 'clock', 'scale': 1, 'origin': 0, 'split_policy': 'reject',
+                           'observation_interval': [-.4, .4]},
+                  'metrics': [{'name': 'seen', 'unit': 'count/s', 'kind': 'event_count',
+                               'scale': 1, 'definition': 'Observed synthetic events per second'}]}
+        windows = build({'schema_version': 1, 'window_s': .1, 'sources': [source]})['windows']
+        occupied = [(w['start_s'], w['valid_observations']) for w in windows if w['valid_observations']]
+        self.assertEqual([(d['start_s'], d['records']) for d in density], occupied)
+        self.assertEqual([(round(t * 10), count) for t, count in occupied], [(-4, 1), (-3, 2), (2, 1), (3, 2)])
 
     def test_no_keys_means_no_duplication_judgment(self):
         q = self.request([[0,'a',1],[0,'a',1]]); q['key_columns'] = []

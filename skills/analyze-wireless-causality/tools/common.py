@@ -92,6 +92,15 @@ def finite_number(value, label, positive=False):
     return n
 
 
+def grid_position(time_s, width):
+    """Snap decimal time boundaries consistently before flooring or ceiling."""
+    position = time_s / width
+    if not math.isfinite(position):
+        raise ValueError('Grid position is not finite; check time units')
+    nearest = round(position)
+    return float(nearest) if abs(position - nearest) <= max(1e-12, 8 * math.ulp(position)) else position
+
+
 def require_keys(obj, required, allowed, context):
     if not isinstance(obj, dict):
         raise ValueError(context + ' must be an object')
@@ -205,10 +214,22 @@ def table_rows(path, sheet=None, header_row=1, required_columns=()):
             if sheet is not None and sheet not in workbook.sheetnames:
                 raise ValueError('Selected sheet is absent')
             ws = workbook[sheet] if sheet is not None else workbook[workbook.sheetnames[0]]
+            # Exporters can understate either dimension. Stream the actual cells to
+            # EOF without an initial full-sheet pass (including for sampled audits).
+            ws.reset_dimensions()
             rows = ws.iter_rows(min_row=header_row, values_only=True)
-            names = checked(next(rows, ()))
+            header = list(next(rows, ()))
+            # Formatting can extend a header row far past the final named field.
+            # A subsequent populated cell beyond that field still fails below.
+            while header and header[-1] is None:
+                header.pop()
+            names = checked(header)
             for rowno, row in enumerate(rows, header_row + 1):
                 if any(v is not None for v in row):
+                    if len(row) > len(names) and any(v is not None for v in row[len(names):]):
+                        raise ValueError(f'Blank or duplicate headers: data extends beyond the header at row {rowno}')
+                    if len(row) < len(names):
+                        row += (None,) * (len(names) - len(row))
                     yield rowno, dict(zip(names, row))
         finally:
             workbook.close()

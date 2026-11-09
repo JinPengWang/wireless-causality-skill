@@ -8,6 +8,8 @@ Treat repeated windows and simultaneous links as dependent measurements. Aggrega
 
 Do not claim graph or mechanism differences from 'significant in one group, nonsignificant in another'. Test the contrast or show uncertainty and comparable power. Do not claim equivalence from a nonsignificant difference. Prespecify primary outcomes, comparisons and multiplicity handling.
 
+For paired contrasts, each side's `registered_runs` counts the submitted run summaries for that direction, metric, unit and entity. `analyzable_runs` excludes missing means and unknown matching identities; `excluded_before_matching` identifies those runs and reasons. `matched_runs` counts runs with an analyzable counterpart in the same pair and condition. Report matched / registered alongside the existing support fraction (matched / analyzable). Multiple conditions for one pair count separately here and contribute one independent pair to the final contrast. Planned runs absent from the input need a separate manifest reconciliation.
+
 ## Regular, irregular and unknown exposure schedules
 
 A task-provided schedule is metadata, not a measured intervention log. Use actual anchors when available; otherwise propagate onset ranges and clearly label assumed alignment. Verify that schedule repetitions and durations agree with observed recordings. Preserve source-relative axes when alignment cannot be established.

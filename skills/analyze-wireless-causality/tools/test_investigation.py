@@ -113,6 +113,62 @@ class BackendTests(unittest.TestCase):
         q,d=paired_fixture();q['analyses'][0]['design']={'type':'observational_paired'}
         r=causal(q,d)['analyses'][0]['result']
         self.assertIsNone(r['p_value']);self.assertEqual(r['inference']['status'],'not_identified')
+
+    def test_unresolved_randomization_retains_differences_without_effect_label(self):
+        fields = ['assignment_evidence', 'estimand', 'population', 'time_horizon',
+                  'carryover_assessment', 'interference_assessment', 'missingness_assessment']
+        for key, value in ([(key, 'unknown') for key in fields] + [
+                ('assignment_evidence', None), ('assignment_evidence', ' 未知 '),
+                ('assignment_evidence', 'Pair order was not randomized.'),
+                ('assignment_evidence', '未随机分配，固定先后顺序'),
+                ('assignment_evidence', 'Randomization: unknown'),
+                ('assignment_evidence', 'Assignment method = not documented'),
+                ('assignment_evidence', 'Non-random assignment; A was always measured before B.'),
+                ('assignment_evidence', '未隨機分配，固定先 A 後 B。'),
+                ('assignment_evidence', '隨機分配狀態：未知'),
+                ('carryover_assessment', ' TBD: check later'), ('estimand', '不适用'),
+                ('carryover_assessment', 'Not applicable: TBD'),
+                ('carryover_assessment', 'Not applicable'),
+                ('interference_assessment', 'TODO_CHECK_INTERFERENCE'),
+                ('assignment_unit', 'recording'), ('assignment_status', 'unknown')]):
+            with self.subTest(key=key, value=value):
+                q, d = paired_fixture()
+                design = q['analyses'][0]['design']
+                if value is None:
+                    del design[key]
+                else:
+                    design[key] = value
+                report = causal(q, d)
+                analysis = report['analyses'][0]
+                result = analysis['result']
+                self.assertEqual(analysis['status'], 'partial')
+                self.assertEqual(result['summary']['equal_unit_mean'], 1.)
+                self.assertEqual(result['claim_type'], 'association')
+                self.assertEqual(result['inference']['status'], 'not_identified')
+                self.assertIn(key, result['inference']['unresolved_fields'])
+                self.assertIsNone(result['p_value'])
+                self.assertEqual(report['multiplicity']['results'][0]['status'], 'not_tested')
+
+    def test_documented_randomization_keeps_existing_exact_inference(self):
+        q, d = paired_fixture()
+        design = q['analyses'][0]['design']
+        design.update(assignment_status='documented', assignment_evidence='Pair order was drawn using seeded RNG in log R1',
+                      missingness_assessment='Missing outcomes were checked against the log; all assigned observations are present.')
+        design['assignment_evidence'] += '; no evidence of randomization errors was found.'
+        result = causal(q, d)['analyses'][0]['result']
+        self.assertEqual(result['claim_type'], 'intervention_effect')
+        self.assertEqual(result['p_value'], .25)
+
+    def test_assessment_can_explain_why_a_risk_does_not_apply(self):
+        for explanation in ('Not applicable: different devices in each pair received one condition each.',
+                            '不適用：配對中的兩台設備各自只接受一種條件。'):
+            with self.subTest(explanation=explanation):
+                request, data = paired_fixture()
+                request['analyses'][0]['design']['carryover_assessment'] = explanation
+                result = causal(request, data)['analyses'][0]['result']
+                self.assertEqual(result['claim_type'], 'intervention_effect')
+                self.assertEqual(result['p_value'], .25)
+
     def test_holm_keeps_unexecuted_family_member(self):
         q,d=paired_fixture();q['analyses'].append({**q['analyses'][0],'id':'P','mode':'plan'})
         q['multiplicity']['families']['primary'].append('P')
@@ -139,6 +195,38 @@ class BackendTests(unittest.TestCase):
         q['analyses'][0]['prediction']={'step_s':.2,'lag_steps':1,'train_fraction':.6,'min_test_rows':5}
         d['records'][20]['time_s']+=.01
         self.assertEqual(causal(q,d)['analyses'][0]['status'],'unsupported')
+
+    def test_unit_holdout_can_score_unit_with_constant_exposure_and_accounts_for_missing_recordings(self):
+        q, d = causal_fixture('lagged_prediction')
+        q['analyses'][0]['prediction'] = {'step_s': .2, 'lag_steps': 1, 'train_fraction': .6, 'min_test_rows': 5}
+        # Current outcomes must vary independently of the past features used in the fit.
+        for i, row in enumerate(d['records']):
+            row['values']['outcome'] += math.sin(i)
+            if row['recording_id'] == 'rec2':
+                row['values']['signal'] = 0
+        for unit, recording in [('independent2', 'empty'), ('independent3', 'only-empty')]:
+            d['records'].append({'recording_id': recording, 'unit_id': unit, 'time_s': 0, 'values': {}})
+        result = causal(q, d)['analyses'][0]['result']
+        temporal = {r['recording_id']: r['status'] for r in result['recordings']}
+        units = {r['unit_id']: r for r in result['held_out_units']}
+        self.assertEqual(temporal['rec2'], 'unsupported')
+        self.assertEqual(units['independent2']['status'], 'partial')
+        self.assertEqual(units['independent2']['training_units'], ['independent0', 'independent1'])
+        self.assertEqual(units['independent2']['recordings'][0]['test_rows'], list(range(161, 240)))
+        self.assertEqual(units['independent2']['excluded_recordings'][0]['recording_id'], 'empty')
+        self.assertEqual(units['independent3']['status'], 'unsupported')
+        self.assertTrue(units['independent3']['reason'])
+        self.assertEqual(result['validation']['unit_holdout_statuses'], {'executed': 2, 'partial': 1, 'unsupported': 1})
+
+    def test_unit_holdout_without_temporal_fit_still_returns_partial_execution(self):
+        q, d = causal_fixture('lagged_prediction')
+        q['analyses'][0]['prediction'] = {'step_s': .2, 'lag_steps': 1, 'train_fraction': .99, 'min_test_rows': 5}
+        for i, row in enumerate(d['records']):
+            row['values']['outcome'] += math.sin(i)
+        analysis = causal(q, d)['analyses'][0]
+        self.assertEqual(analysis['status'], 'partial')
+        self.assertEqual(analysis['result']['validation']['temporal_holdout_statuses'], {'unsupported': 3})
+        self.assertEqual(analysis['result']['validation']['unit_holdout_statuses'], {'executed': 3})
     def test_overflow_never_emits_nonfinite_json(self):
         q,d=causal_fixture(units=1)
         for i,row in enumerate(d['records']):row['values']['outcome']=1e200*(-1 if i%2 else 1)
@@ -259,6 +347,43 @@ class EvidenceTests(unittest.TestCase):
         q['artifacts']['a']['sha256']=sha256(path);q['claims'][0].update(expression='sum(amount)',value=9007199254740992,unit='byte')
         q['claims'][0]['operands'].pop('duration');q['claims'][0]['tolerance']={'absolute':0,'relative':0}
         self.assertEqual(verify(q,self.root)['claims'][0]['status'],'failed')
+
+    def test_integer_intermediate_cancellation_cannot_pass_a_zero_tolerance_claim(self):
+        q = self.bundle()
+        path = self.root/'values.json'
+        boundary = 2**53
+        write_json(path, {'x': 1, 'v': [boundary, 1]})
+        q['artifacts']['a']['sha256'] = sha256(path)
+        claim = q['claims'][0]
+        for expression, field in [(f'{boundary} + x - {boundary}', 'x'), (f'sum(x) - {boundary}', 'v'),
+                                  (f'({boundary} * 2 + x) - {boundary} * 2', 'x')]:
+            with self.subTest(expression=expression):
+                claim.update(expression=expression, value=0, unit='1', tolerance={'absolute': 0, 'relative': 0},
+                             operands={'x': {'artifact': 'a', 'locator': {'type': 'json_pointer', 'pointer': '/'+field},
+                                             'unit': '1', 'unit_basis': 'Synthetic count'}})
+                check = verify(q, self.root)['claims'][0]
+                self.assertEqual(check['status'], 'failed')
+                self.assertIn('integer intermediate', check['reason'])
+
+    def test_exactly_representable_large_intermediate_and_floating_values(self):
+        operands = {'x': Quantity(2.**53, {})}
+        self.assertEqual(expression_value('x*2-x', operands).value, 2**53)
+        self.assertAlmostEqual(expression_value('x/3', {'x': Quantity(1., {})}).value, 1/3)
+        self.assertEqual(expression_value('x*2', {'x': Quantity(1e100, {})}).value, 2e100)
+
+    def test_scaled_source_integer_cannot_round_before_expression_evaluation(self):
+        q = self.bundle()
+        path = self.root/'values.json'
+        write_json(path, {'x': 3002399751580331})
+        q['artifacts']['a']['sha256'] = sha256(path)
+        q['units'] = {'triple': {'dimensions': {}, 'scale': 3}}
+        q['claims'][0].update(expression='x-9007199254740992', value=0, unit='1',
+                              operands={'x': {'artifact': 'a', 'locator': {'type': 'json_pointer', 'pointer': '/x'},
+                                              'unit': 'triple', 'unit_basis': 'Three units per count'}},
+                              tolerance={'absolute': 0, 'relative': 0})
+        check = verify(q, self.root)['claims'][0]
+        self.assertEqual(check['status'], 'failed')
+        self.assertIn('integer intermediate', check['reason'])
     def test_unresolved_placeholders_rejected(self):
         for target in ['statement','unit_basis']:
             q=self.bundle()
@@ -289,6 +414,56 @@ class EvidenceTests(unittest.TestCase):
         q=self.ledger();p=self.root/'diagnosis.md';render(q,self.root,p)
         s=p.read_text(encoding='utf-8');self.assertIn('完成度与回答程度',s);self.assertIn('数值主张核验',s)
         self.assertNotIn('![',s)
+
+    def test_v3_strong_claim_requires_a_specific_executed_result(self):
+        q = self.ledger()
+        path = self.root/'result.json'
+        evidence = {'path': path.name, 'supports': 'Scoped synthetic result'}
+        finding = {**q['phenomena'][0], 'id': 'F', 'status': 'validated_mechanism',
+                   'claim_type': 'intervention_effect', 'explains': ['P1'], 'priority': 1,
+                   'priority_reason': 'Synthetic case', 'mechanism': 'Synthetic design',
+                   'support': 'Measured result', 'counterevidence': 'Scope limited',
+                   'next_test': 'Replicate', 'prediction': 'A prespecified change',
+                   'strongest_alternative': 'A competing explanation', 'evidence': [evidence],
+                   'validation': {'result_path': path.name, 'design': 'Paired randomization',
+                                  'independent_replication': 'Separate pairs', 'reviewer_assessment': 'Fixture reviewed',
+                                  'identification_scope': 'Synthetic pairs'}}
+        q['findings'] = [finding]
+        request, data = paired_fixture()
+        result = causal(request, data)
+        for document, pointer, allowed in [
+                ({'inputs': [], 'options': {}}, '', False),
+                (12.5, '', True),
+                ({'values': [12.5]}, '/values/0', True),
+                ({'analyses': [{'estimate': 12.5}], 'execution_summary': {'completed': 1}},
+                 '/analyses/0/estimate', True),
+                (result, '/configuration', False),
+                (result, '/analyses/0/result/design', False),
+                (result, '/analyses/0/result/inference/assumptions_verified_by_software', False),
+                (result, '/analyses/0/result/pairs/0/unit_id', False),
+                (result, '/analyses/0/result/summary/uncertainty', False),
+                (result, '/analyses/0/result/pairs/0', True),
+                (result, '/analyses/0/result/pairs/0/difference', True),
+                (result, '/analyses/0/result/p_value', True)]:
+            with self.subTest(pointer=pointer, allowed=allowed):
+                write_json(path, document)
+                evidence.update(sha256=sha256(path), locator={'type': 'json_pointer', 'pointer': pointer})
+                if allowed:
+                    validate_evidence(q, self.root)
+                else:
+                    with self.assertRaisesRegex(ValueError, 'specific located result'):
+                        validate_evidence(q, self.root)
+        request['analyses'][0]['design'] = {'type': 'observational_paired'}
+        write_json(path, causal(request, data))
+        evidence.update(sha256=sha256(path), locator={'type': 'json_pointer', 'pointer': '/analyses/0/result/summary'})
+        with self.assertRaisesRegex(ValueError, 'specific located result'):
+            validate_evidence(q, self.root)
+        config = self.root/'config.json'
+        finding['validation']['result_path'] = config.name
+        evidence.update(path=config.name, sha256=sha256(config),
+                        locator={'type': 'json_pointer', 'pointer': '/description'})
+        with self.assertRaisesRegex(ValueError, 'specific located result'):
+            validate_evidence(q, self.root)
     def test_json_export_is_independent_of_presentation_language(self):
         q=self.ledger();q['language']='other-language';p=self.root/'diagnosis.json'
         render(q,self.root,p,output_format='json');r=read_json(p)

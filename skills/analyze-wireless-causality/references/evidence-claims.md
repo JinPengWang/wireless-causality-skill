@@ -30,7 +30,7 @@ Supported arithmetic is deliberately small: named operands, finite numeric const
 
 Built-in units include dimensionless `1`/`%`, time, information, rates, counts, frequency and `dB`; see `DEFAULT_UNITS` for exact spellings/scales. Unit algebra prevents adding unlike dimensions and converts results into the requested unit. Add a custom unit through `units: {"name": {"dimensions": {"dimension": 1}, "scale": 1}}`; do not redefine built-ins. This is a unit-consistency check, not a universal ontology. In particular, distinct layer metrics sharing a dimension are not automatically comparable, and logarithmic quantities need domain-appropriate formulas.
 
-The checker currently uses finite float64 arithmetic. Integer and integer-string inputs/constants/assertions outside the exact integer range are rejected rather than silently rounding them. Use an exact-arithmetic adapter when required. Select tolerances to cover justified numerical/rounding error, not to excuse a scientific mismatch. Arithmetic tolerance is not measurement uncertainty or a confidence interval.
+The checker uses finite float64 arithmetic. Integer and integer-string inputs/constants/assertions outside the exact integer range are rejected. For integral values within that range, addition, subtraction, multiplication (including integral unit scaling) and vector sums retain integer intermediates and check each result for exact float64 representation before continuing. A sum or product that would lose an integer unit fails the check even if a later subtraction would conceal the loss. Fractional scaling, division, mixed fractional measurements and values already supplied as large floats still have ordinary float64 precision. Use an exact-arithmetic adapter when required. Select tolerances to cover justified numerical/rounding error, not to excuse a scientific mismatch. Arithmetic tolerance is not measurement uncertainty or a confidence interval.
 
 The pass criterion is:
 
@@ -56,6 +56,8 @@ Use `assets/evidence_ledger.template.json` for new work. V3 retains the v2 core 
 
 A validated mechanism or intervention-effect item additionally needs design, independent replication, reviewer assessment, identification scope and a specifically located result artifact. Those records are attestations for review, not software proof of identification.
 
+For these v3 validation results, point into a JSON result object or array. An empty JSON pointer is suitable only for a standalone scalar. A configuration-only provenance artifact cannot be the result. For the bundled causal backend, cite the executed effect result under `/analyses/<index>/result`, its paired differences, effect summary or p-value. Device IDs and assumption flags are context. An association, prediction, planned analysis or unsupported inference can still be cited as supporting context. For other backends the reviewer must check the located result's method, status and interpretation.
+
 Figures are optional, without a fixed count. Choose text, tables, structured results and plots according to the evidence and requested delivery. When used, figure hashes and decodability are checked; readability, selection and whether the image supports the statement require a separate check. Evidence locators support JSON pointers, table cells/rows, physical text-line ranges, whole-file references or explicitly unverified descriptions. A whole-file reference establishes only file scope.
 
 Legacy v2 ledgers remain readable. They do not receive v3 numerical or assessment verification by implication. Migrate explicitly when those checks are needed. Do not rewrite old records as if the new checks had already been performed.
@@ -66,7 +68,7 @@ Legacy v2 ledgers remain readable. They do not receive v3 numerical or assessmen
 
 ```text
 python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --format json --output results/analysis.json
-python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --format markdown --output results/diagnosis.md
+python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --presentation logs/presentation.json --format markdown --output results/diagnosis.md
 python -B "<skill_root>/tools/write_report.py" --ledger logs/evidence_ledger.json --presentation logs/presentation.json --format html --output results/diagnosis.html
 ```
 

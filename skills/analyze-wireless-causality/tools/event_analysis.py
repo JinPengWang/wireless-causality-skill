@@ -3,6 +3,11 @@ import math
 from common import finite_number, known_identity, require_keys, validate_windows
 
 
+def same_boundary(left, right):
+    tolerance = max(1e-9, 4*math.ulp(left), 4*math.ulp(right))
+    return math.isclose(left, right, rel_tol=0., abs_tol=tolerance)
+
+
 def phase_summary(rows, start, end, split_policy='reject'):
     selected, excluded, total, exposure = [], [], 0., 0.
     for index, row in rows:
@@ -34,15 +39,12 @@ def threshold_followup(rows, start, end):
         left, right = max(start, row['start_s']), min(end, row['end_s'])
         if right <= left or row['value'] is None or row['coverage'] < 1:
             continue
-        close = math.isclose(left, cursor, rel_tol=0.,
-                             abs_tol=max(1e-9, 4*math.ulp(left), 4*math.ulp(cursor)))
-        if left > cursor and not close:
+        if left > cursor and not same_boundary(left, cursor):
             gaps.append([cursor, left])
         observed += max(0., right-max(left, cursor))
         cursor = max(cursor, right)
         last_observed_end = cursor
-    close_end = math.isclose(cursor, end, rel_tol=0.,
-                             abs_tol=max(1e-9, 4*math.ulp(cursor), 4*math.ulp(end)))
+    close_end = same_boundary(cursor, end)
     if last_observed_end is None or (cursor < end and not close_end):
         gaps.append([cursor, end])
     # Normalize floating-point continuity in the same way as the onset scan.
@@ -141,7 +143,7 @@ def analyze(request, data):
                 for index, row in rows:
                     if row['end_s'] <= anchor or row['start_s'] >= anchor+post[1]:
                         continue
-                    continuous = previous_end is not None and math.isclose(row['start_s'], previous_end, abs_tol=max(1e-9, 4*math.ulp(row['start_s']), 4*math.ulp(previous_end)), rel_tol=0.)
+                    continuous = previous_end is not None and same_boundary(row['start_s'], previous_end)
                     if not continuous:
                         candidate = None
                     previous_end = row['end_s']
@@ -165,9 +167,10 @@ def analyze(request, data):
                             'gaps': gaps, 'onset_window': onset, 'lag_bounds_s': None,
                             'followup': followup, 'right_censored': right_censored,
                             'scope': 'First sustained threshold excursion in observed follow-up; not necessarily a response to the anchor.'}
-                earlier = [r for _, r in rows if onset and r['end_s'] <= onset['window_start_s']]
-                prior = earlier[-1] if earlier else None
-                prior_bad = prior is None or prior['value'] is None or prior['coverage'] < 1 or (prior['value'] < threshold if direction == 'below' else prior['value'] > threshold)
+                prior = next((r for _, r in reversed(rows) if onset and r['start_s'] < onset['window_start_s']), None)
+                prior_bad = (prior is None or not same_boundary(prior['end_s'], onset['window_start_s'])
+                             or prior['value'] is None or prior['coverage'] < 1
+                             or (prior['value'] < threshold if direction == 'below' else prior['value'] > threshold))
                 onset_gaps = [gap for gap in gaps if not onset or gap[0] < onset['window_start_s']]
                 response['left_or_gap_censored'] = bool(prior_bad or onset_gaps)
                 response['timing_meaning'] = 'Threshold-bin timing only, not a measured physical response onset'

@@ -10,7 +10,9 @@ from zipfile import BadZipFile, ZipFile
 import openpyxl
 
 from audit_workbooks import audit
-from common import sha256
+from build_windows import build
+from common import sha256, table_rows
+from quality_profile import profile
 
 
 class AuditStatusTests(unittest.TestCase):
@@ -44,18 +46,21 @@ class AuditStatusTests(unittest.TestCase):
         wb.close()
         return path
 
-    def malformed_numeric(self):
-        """The ZIP remains valid; only the third worksheet row cannot be decoded."""
-        path = self.workbook()
+    def replace_sheet_xml(self, path, original, replacement):
         with ZipFile(path) as source:
             entries = [(entry, source.read(entry.filename)) for entry in source.infolist()]
         with ZipFile(path, 'w') as target:
             for entry, data in entries:
                 if entry.filename == 'xl/worksheets/sheet1.xml':
-                    self.assertIn(b'<c r="A3" t="n"><v>22</v></c>', data)
-                    data = data.replace(b'<c r="A3" t="n"><v>22</v></c>',
-                                        b'<c r="A3" t="n"><v>broken-number</v></c>')
+                    self.assertIn(original, data)
+                    data = data.replace(original, replacement, 1)
                 target.writestr(entry, data)
+
+    def malformed_numeric(self):
+        """The ZIP remains valid; only the third worksheet row cannot be decoded."""
+        path = self.workbook()
+        self.replace_sheet_xml(path, b'<c r="A3" t="n"><v>22</v></c>',
+                               b'<c r="A3" t="n"><v>broken-number</v></c>')
         return path
 
     def cli(self, inputs, output=None, extra=()):
@@ -91,6 +96,71 @@ class AuditStatusTests(unittest.TestCase):
         self.assertEqual(result['status'], 'completed')
         self.assertEqual(result['sheets'][0]['rows_scanned'], 0)
         self.assertTrue(result['full_scan_completed'])
+
+    def test_understated_dimensions_preserve_rows_columns_and_event_counts(self):
+        path = self.workbook([('Events', ['clock', 'optional'], [[11], [22, 'tail']])])
+        self.replace_sheet_xml(path, b'dimension ref="A1:B3"', b'dimension ref="A1:A1"')
+        before = sha256(path)
+        result = audit(path)
+        sheet = result['sheets'][0]
+        self.assertEqual(result['status'], 'completed')
+        self.assertTrue(result['full_scan_completed'])
+        self.assertEqual((sheet['declared_rows'], sheet['declared_columns']), (1, 1))
+        self.assertEqual(sheet['scan']['scanned_data_beyond_declared_bounds'], ['rows', 'columns'])
+        self.assertEqual(sheet['rows_scanned'], 2)
+        self.assertEqual(sheet['columns']['clock']['max'], 22)
+        self.assertEqual(sheet['columns']['optional']['missing'], 1)
+        self.assertEqual(list(table_rows(path)), [(2, {'clock': 11, 'optional': None}),
+                                                 (3, {'clock': 22, 'optional': 'tail'})])
+        quality = profile({'schema_version': 1, 'source': {'path': str(path)},
+                           'time': {'column': 'clock', 'scale': 1, 'origin': 0},
+                           'density_window_s': 10, 'gap_threshold_s': 10})
+        self.assertEqual([(b['start_s'], b['records']) for b in quality['groups'][0]['density']],
+                         [(10, 1), (20, 1)])
+
+        source = {'path': str(path), 'capture_complete': True,
+                  'metadata': {'run_id': 'recording', 'entity': 'test', 'direction': 'uplink',
+                               'condition': 'synthetic', 'pair_id': 'pair'},
+                  'time': {'start': 'clock', 'scale': 1, 'origin': 0, 'split_policy': 'reject',
+                           'observation_interval': [0, 30]},
+                  'metrics': [{'name': 'event_rate', 'unit': 'count/s', 'kind': 'event_count',
+                               'scale': 1, 'definition': 'Observed synthetic events per second'}]}
+        windows = build({'schema_version': 1, 'window_s': 10, 'sources': [source]})['windows']
+        self.assertEqual([w['value'] for w in windows], [0, .1, .1])
+        self.assertEqual([w['source_rows'] for w in windows], [[], [2], [3]])
+        self.assertEqual(sha256(path), before)
+
+    def test_wider_data_than_header_fails_when_reached(self):
+        path = self.workbook([('Data', ['clock'], [[11], [22, 'unmapped']])])
+        self.replace_sheet_xml(path, b'dimension ref="A1:B3"', b'dimension ref="A1:A3"')
+        sampled = audit(path, max_rows=1)
+        self.assertEqual(sampled['status'], 'completed')
+        self.assertFalse(sampled['full_scan_completed'])
+        full = audit(path)
+        self.assertEqual(full['status'], 'partial')
+        self.assertFalse(full['full_scan_completed'])
+        self.assertEqual(full['sheets'][0]['rows_scanned'], 1)
+        self.assertIn('beyond the header at row 3', full['sheets'][0]['issue'])
+
+    def test_formatted_empty_tail_and_sparse_rows_preserve_physical_row_numbers(self):
+        path = self.root / 'formatted.xlsx'
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(['clock', 'label'])
+        ws.append([11, 'first'])
+        ws['K1'].number_format = '0.00'
+        ws['Q3'].number_format = '0.00'
+        ws['A4'] = 22
+        ws['Z30'].number_format = '0.00'
+        wb.save(path)
+        wb.close()
+        self.assertEqual(list(table_rows(path)), [(2, {'clock': 11, 'label': 'first'}),
+                                                 (4, {'clock': 22, 'label': None})])
+        result = audit(path)
+        self.assertTrue(result['full_scan_completed'])
+        sheet = result['sheets'][0]
+        self.assertEqual((sheet['rows_scanned'], sheet['scan']['last_source_row']), (2, 4))
+        self.assertEqual(sheet['scan']['scanned_data_beyond_declared_bounds'], [])
 
     def test_blank_header_is_failed(self):
         result = audit(self.workbook([('Bad', ['metric', None], [[1, 2]])]))

@@ -34,6 +34,7 @@ def audit(path, max_rows=None, header_row=1, sheet=None):
               'mode':'full' if max_rows is None else 'sample', 'header_row':header_row,
               'max_rows':max_rows, 'sheet_selection':sheet,
               'scan_scope':'all_sheets' if sheet is None else 'selected_sheet',
+              'dimension_policy':'Declared worksheet dimensions are metadata; scan actual rows and columns.',
               'formula_policy':'cached values only; formula caches may be absent or stale'}
     for sheet, declared_rows, declared_cols in sheets:
         profile, count, issue, issue_type = {}, 0, None, None
@@ -76,12 +77,18 @@ def audit(path, max_rows=None, header_row=1, sheet=None):
         for col in profile.values():
             col['missing'] = count - col['present']
             col['first_64_values_counts'] = dict(col.pop('bounded_values'))
+        exceeded = []
+        if last_source_row is not None and declared_rows is not None and last_source_row > declared_rows:
+            exceeded.append('rows')
+        if declared_cols is not None and len(profile) > declared_cols:
+            exceeded.append('columns')
         result['sheets'].append({'sheet':sheet,'declared_rows':declared_rows,
                                 'declared_columns':declared_cols,'rows_scanned':count,
                                 'status':('partial' if count else 'failed') if issue_type else 'completed',
                                 'issue':issue,'issue_type':issue_type,'columns':profile,
                                 'scan':{'max_rows':max_rows,'limit_unit':'nonempty_data_rows',
                                         'boundary':boundary,'last_source_row':last_source_row,
+                                        'scanned_data_beyond_declared_bounds':exceeded,
                                         'full_sheet_scanned':boundary == 'end_of_sheet'}})
     if sha256(path) != before:
         raise RuntimeError('Source changed during audit')

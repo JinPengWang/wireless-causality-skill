@@ -46,7 +46,12 @@ def render(report, base, output, ledger_path=None, presentation=None, output_for
         audit_text = json.dumps({**model, 'presentation': presentation_trace}, ensure_ascii=False, indent=2, allow_nan=False)+'\n'
         if audit_path.exists() and audit_path.read_text(encoding='utf-8-sig') != audit_text:
             raise ValueError('Use a fresh report basename; existing audit sidecars are not overwritten')
-        writer = Writer(output, output_format, report.get('title', label['title']), report.get('language', 'en'), theme)
+        reference_numbers = settings['reference_numbers']
+        visual_references = (None if reference_numbers is None else
+                             {key: label[key.split(':', 1)[0]]+' '+str(number)
+                              for key, number in reference_numbers.items()})
+        writer = Writer(output, output_format, report.get('title', label['title']), report.get('language', 'en'),
+                        theme, visual_references=visual_references)
         writer.sources = [{'path': writer.relative(path), 'sha256': digest} for path, digest in hashes.items()]
         writer.sources.append({'path': writer.relative(audit_path), 'sha256': hashlib.sha256(audit_text.encode('utf-8')).hexdigest()})
         def state(value):
@@ -55,7 +60,7 @@ def render(report, base, output, ledger_path=None, presentation=None, output_for
             pairs = [(item['id'], '#'+anchor('audit', item['id']))]
             pairs += [(c, '#'+anchor('claim', c)) for c in item.get('claim_ids', [])]
             writer.references(label['evidence'], pairs)
-        all_items = report['phenomena']+sorted(report['findings'], key=lambda x: (x['priority'], x['id']))
+        all_items = settings['sections']['phenomena'] + settings['sections']['findings']
         by_id = {i['id']: i for i in all_items}
         writer.container('header', 'report-header')
         writer.paragraph(label['title'], 'eyebrow')
@@ -80,12 +85,11 @@ def render(report, base, output, ledger_path=None, presentation=None, output_for
         writer.heading(2, label['scope'], 'scope')
         writer.paragraph(report['scope'])
         writer.field(label['measurement_contract'], report['measurement_contract'])
-        figures, tables = 0, 0
-        for section in ['phenomena', 'findings']:
+        figures = 0
+        for section, items in settings['sections'].items():
             writer.heading(2, label[section], section)
             if section == 'findings':
                 writer.paragraph(label['priority_note'], 'meta')
-            items = report['phenomena'] if section == 'phenomena' else sorted(report['findings'], key=lambda x: (x['priority'], x['id']))
             if not items:
                 writer.paragraph(label['no_items'])
             for item in items:
@@ -96,14 +100,17 @@ def render(report, base, output, ledger_path=None, presentation=None, output_for
                     writer.field(label['claim_type'], state(item['claim_type']), 'meta')
                 item_links(item)
                 for table in (t for t in settings['tables'] if t['owner'] == item['id']):
-                    tables += 1
-                    caption = label['table']+' '+str(tables)+'. '+table['title']+(' ('+label['continued']+')' if table['continued'] else '')
+                    caption = label['table']+' '+str(table['number'])+'. '+table['title']+(' ('+label['continued']+')' if table['continued'] else '')
                     headers = [c['label']+(' ('+c['unit']+')' if c.get('unit') else '') for c in table['columns']]
                     writer.table(headers, table['rows'], caption)
                     writer.paragraph(table['note'], 'meta')
+                    if reference_numbers is not None and table['last_part']:
+                        writer.paragraph(settings['readings']['table:'+table['logical_id']], 'visual-reading')
                 for figure in item['figures']:
                     figures += 1
                     writer.figure(base/figure['path'], figure['caption'], figures, label['figure'])
+                    if reference_numbers is not None:
+                        writer.paragraph(settings['readings']['figure:'+figure['id']], 'visual-reading')
                 writer.field(label['calculation'], item['calculation'])
                 for key in ['priority_reason', 'mechanism', 'prediction', 'support', 'strongest_alternative', 'counterevidence', 'limitations', 'next_test']:
                     if key in item:
@@ -205,7 +212,7 @@ def main():
     parser.add_argument('--ledger', required=True)
     parser.add_argument('--output', required=True)
     parser.add_argument('--format', choices=['markdown', 'html', 'json'], default='markdown')
-    parser.add_argument('--presentation', help='Optional summary/table/title/language presentation JSON')
+    parser.add_argument('--presentation', help='Optional presentation JSON (v2 adds figure/table readings and stable references)')
     parser.add_argument('--theme', help='Optional validated theme overrides JSON')
     args = parser.parse_args()
     source = Path(args.ledger).resolve()

@@ -3,19 +3,11 @@ import argparse
 import math
 from collections import defaultdict
 from pathlib import Path
-from common import (finite_number, number, read_json, require_keys, sha256,
+from common import (finite_number, grid_position, number, read_json, require_keys, sha256,
                     table_rows, write_json, ensure_output_safe, measurement_signature)
 
 META = {'run_id', 'entity', 'direction', 'condition', 'pair_id'}
 KINDS = {'interval_mean', 'interval_amount', 'ratio', 'event_mean', 'event_sum', 'event_count', 'event_fraction'}
-
-
-def grid_position(time_s, width):
-    q = time_s / width
-    if not math.isfinite(q):
-        raise ValueError('Grid position is not finite; check time units')
-    nearest = round(q)
-    return float(nearest) if abs(q - nearest) <= max(1e-12, 8 * math.ulp(q)) else q
 
 
 def build(request):

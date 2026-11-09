@@ -17,6 +17,7 @@ from pathlib import Path
 
 from common import read_json, sha256
 from evidence_model import validate_evidence
+from reexport_report import settings_digest
 
 
 DEFAULT_SKILL = Path(__file__).resolve().parents[1]
@@ -43,11 +44,12 @@ def _references(report):
         yield f'/provenance/artifacts/{index}', 'provenance', artifact
 
 
-def _runtime_files(root):
+def _runtime_files(root, include_tests):
     tools, assets = root/'tools', root/'assets'/'report'
     if not tools.is_dir() or not assets.is_dir():
         raise ValueError('Renderer source root needs tools/ and assets/report/: '+str(root))
-    paths = sorted(tools.glob('*.py'))+sorted(p for p in assets.rglob('*') if p.is_file())
+    paths = sorted(p for p in tools.glob('*.py') if include_tests or not p.name.startswith('test_'))
+    paths.extend(sorted(p for p in assets.rglob('*') if p.is_file()))
     for name in ['SKILL.md', 'skill_instructions.md']:
         if (root/name).is_file():
             paths.append(root/name)
@@ -91,7 +93,7 @@ def _verify_unchanged(hashes):
 
 
 def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
-             presentation_path=None, theme_path=None, *, _invocation=None):
+             presentation_path=None, theme_path=None, *, export_audit_path=None, _invocation=None):
     """Return the manifest of a fresh, independently re-exportable snapshot.
 
     Existing ledger text, semantic statements, assessment and historical command
@@ -105,6 +107,9 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
         raise ValueError('Use a fresh output directory; snapshots are never overwritten: '+str(requested_output))
     output = requested_output.resolve()
     skill_root = Path(skill_root if skill_root is not None else DEFAULT_SKILL).resolve()
+    # Historical and alternate renderers can have different dependencies.
+    # The current renderer does not import its maintenance test suite.
+    include_runtime_tests = source_root is not None or skill_root != DEFAULT_SKILL
     source_root = Path(source_root if source_root is not None else skill_root).resolve()
     _check_output(output, skill_root, source_root, ledger)
     if not ledger.is_file():
@@ -141,9 +146,9 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
     # Observe the live source as well as recovered source bytes; neither may be
     # changed by this operation. Copy only the bounded renderer dependency tree.
     for root in {skill_root, source_root}:
-        for path in _runtime_files(root):
+        for path in _runtime_files(root, include_runtime_tests):
             observe(path.resolve())
-    for path in _runtime_files(source_root):
+    for path in _runtime_files(source_root, include_runtime_tests):
         relative = path.relative_to(source_root)
         destination = _runtime_destination(relative)
         digest = observe(path.resolve())
@@ -198,6 +203,7 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
                                  'original_resolved_path': str(original), 'original_observed_sha256': original_observed,
                                  'source_path': str(source), 'snapshot_path': copied['path'], 'sha256': expected})
 
+    settings = {}
     for usage, supplied in [('presentation', presentation_path), ('theme', theme_path)]:
         if supplied is None:
             continue
@@ -205,12 +211,33 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
         if not original.is_file():
             raise ValueError('Missing explicit '+usage+' configuration: '+str(original))
         digest = observe(original)
-        read_json(original)
+        settings[usage] = read_json(original)
         destination = Path('configuration')/(usage+'.json')
         plan(original, destination, digest)
         explicit_configs.append({'usage': usage, 'original_path': str(original),
                                  'snapshot_path': destination.as_posix(), 'sha256': digest,
                                  'historical_authentication': 'not_established_by_snapshot'})
+
+    edition = {'status': 'not_checked'}
+    if export_audit_path is not None:
+        audit_path = Path(export_audit_path).resolve()
+        audit_hash = observe(audit_path)
+        audit = read_json(audit_path)
+        if not isinstance(audit, dict) or json.dumps(audit.get('ledger'), sort_keys=True) != json.dumps(report, sort_keys=True):
+            raise ValueError('The export audit belongs to a different ledger')
+        trace = audit.get('presentation')
+        if not isinstance(trace, dict) or 'presentation' not in trace or not isinstance(trace.get('theme'), dict):
+            raise ValueError('Supply the reader export audit containing its presentation and effective theme')
+        effective_theme = read_json(source_root/'assets'/'report'/'theme.json')
+        overrides = settings.get('theme', {})
+        if not isinstance(overrides, dict) or overrides.keys() - effective_theme.keys():
+            raise ValueError('Supply a theme override for the selected renderer')
+        effective_theme.update(overrides)
+        expected = settings_digest(trace['presentation'], trace['theme'])
+        if settings_digest(settings.get('presentation'), effective_theme) != expected:
+            raise ValueError('Reader settings disagree with the export audit; supply the same --presentation and --theme used for that edition')
+        edition = {'status': 'matched', 'audit_path': str(audit_path),
+                   'audit_sha256': audit_hash, 'settings_sha256': expected}
 
     for section in ['phenomena', 'findings']:
         for item in archived.get(section, []):
@@ -223,11 +250,12 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
         'call': {'function': 'snapshot_report.snapshot', 'ledger_path': str(ledger), 'output_dir': str(output),
                  'skill_root': str(skill_root), 'source_root': str(source_root),
                  'presentation_path': str(Path(presentation_path).resolve()) if presentation_path is not None else None,
-                 'theme_path': str(Path(theme_path).resolve()) if theme_path is not None else None}}
+                 'theme_path': str(Path(theme_path).resolve()) if theme_path is not None else None,
+                 'export_audit_path': edition.get('audit_path')}}
     invocation.update({'cwd': str(Path.cwd().resolve()),
                        'scope': ['exact byte hashes for directly declared evidence, figures, numeric and provenance artifacts',
-                                 'bounded copy of renderer tools/*.py and assets/report resources',
-                                 'explicit presentation/theme bytes preserved; historical configuration identity requires separate comparison',
+                                 'renderer tools and assets/report resources; current-skill snapshots omit undeclared maintenance tests',
+                                 'explicit presentation/theme bytes preserved; source_reader_edition records comparison with a supplied export audit',
                                  'current validator checks on the rewritten ledger without executing recovered source code',
                                  'historical assessments and commands retained as recorded; semantic truth is not certified'],
                        'visual_review': 'not_checked'})
@@ -242,7 +270,7 @@ def snapshot(ledger_path, output_dir, skill_root=None, source_root=None,
                 'source_ledger': {'path': str(ledger), 'sha256': ledger_digest},
                 'skill_root': str(skill_root), 'source_root': str(source_root),
                 'snapshot_operation': invocation, 'artifacts': artifact_entries,
-                'explicit_configuration': explicit_configs,
+                'explicit_configuration': explicit_configs, 'source_reader_edition': edition,
                 'runtime_resources': resource_entries, 'reexport_commands': commands,
                 'portable_reexport': {'entrypoint': 'reexport.py', 'interpreter': 'explicitly selected current Python',
                                       'output': 'fresh directory outside package', 'example': 'python -B reexport.py --output-dir ../new_export'},
@@ -282,12 +310,15 @@ def main():
     parser.add_argument('--output-dir', required=True)
     parser.add_argument('--skill-root', default=str(DEFAULT_SKILL))
     parser.add_argument('--source-root', help='Previously verified historical skill source root; exact tool hashes remain mandatory')
-    parser.add_argument('--presentation', help='Explicit presentation JSON to archive; historical identity is not inferred')
-    parser.add_argument('--theme', help='Explicit theme JSON to archive; historical identity is not inferred')
+    parser.add_argument('--presentation', help='Presentation JSON used for the source reading edition')
+    parser.add_argument('--theme', help='Theme overrides used for the source reading edition')
+    parser.add_argument('--export-audit', help='Original HTML/Markdown .audit.json; require matching ledger, presentation and effective theme')
     args = parser.parse_args()
     manifest = snapshot(args.ledger, args.output_dir, args.skill_root, args.source_root, args.presentation, args.theme,
+                        export_audit_path=args.export_audit,
                         _invocation={'invocation': 'cli', 'argv': list(getattr(sys, 'orig_argv', [sys.executable]+sys.argv))})
     print(json.dumps({'snapshot_manifest': str(Path(args.output_dir).resolve()/'snapshot_manifest.json'),
+                      'source_reader_edition': manifest['source_reader_edition'],
                       'reexport_commands': manifest['reexport_commands']}, ensure_ascii=False, indent=2))
 
 

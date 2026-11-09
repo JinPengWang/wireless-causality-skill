@@ -11,6 +11,9 @@ from urllib.parse import quote
 from report_design import stylesheet
 
 
+VISUAL_REFERENCE = re.compile(r'\{\{(figure|table):(?:([A-Za-z0-9_-]+)\}\})?')
+
+
 def md(value):
     text = re.sub(r'([\\`*_\[\]<>|#~])', r'\\\1', str(value).replace('&', '&amp;')).replace('\r', '')
     text = re.sub(r'(?m)^([ \t]*)([-+]|[0-9]+[.)])(?=\s|$)',
@@ -49,12 +52,32 @@ def image_data(path):
 
 
 class Writer:
-    def __init__(self, output, output_format, title, language, theme):
+    def __init__(self, output, output_format, title, language, theme, visual_references=None):
         self.output = Path(output)
         self.html = output_format == 'html'
-        self.title, self.language, self.theme = title, {'Chinese': 'zh-CN', '中文': 'zh-CN', 'English': 'en'}.get(language, language), theme
+        self.visual_references = visual_references
+        self.title = self.display_text(title)
+        self.language = {'Chinese': 'zh-CN', '中文': 'zh-CN', 'English': 'en'}.get(language, language)
+        self.theme = theme
         self.parts = []
         self.sources = []
+
+    def display_text(self, value):
+        """Resolve reserved v2 references before escaping prose for the chosen format."""
+        text = str(value)
+        if self.visual_references is None or '{{' not in text:
+            return text
+
+        def replace(match):
+            kind, identity = match.groups()
+            if identity is None:
+                raise ValueError('Malformed '+kind+' reference in reader text: '+match.string[match.start():match.start()+80])
+            key = kind+':'+identity
+            if key not in self.visual_references:
+                raise ValueError('Unknown visual reference in reader text: '+key)
+            return self.visual_references[key]
+
+        return VISUAL_REFERENCE.sub(replace, text)
 
     def relative(self, path):
         try:
@@ -64,6 +87,7 @@ class Writer:
         return quote(relative, safe='/.-_~')
 
     def heading(self, level, text, identity=None):
+        text = self.display_text(text)
         if self.html:
             attr = ' id="'+html.escape(identity, quote=True)+'"' if identity else ''
             self.parts.append(f'<h{level}{attr}>'+html.escape(text)+f'</h{level}>')
@@ -73,7 +97,7 @@ class Writer:
             self.parts.append('#'*level+' '+md(text)+'\n')
 
     def paragraph(self, text, css=None):
-        for part in re.split(r'\n\s*\n', str(text).strip()):
+        for part in re.split(r'\n\s*\n', self.display_text(text).strip()):
             if self.html:
                 attr = ' class="'+css+'"' if css else ''
                 self.parts.append('<p'+attr+'>'+html.escape(part).replace('\n', '<br>')+'</p>')
@@ -81,6 +105,7 @@ class Writer:
                 self.parts.append(md(part)+'\n')
 
     def field(self, label, text, css=None):
+        text = self.display_text(text)
         if self.html:
             self.parts.append('<p'+(' class="'+css+'"' if css else '')+'><strong>'+html.escape(label)+': </strong>'+html.escape(str(text)).replace('\n', '<br>')+'</p>')
         else:
@@ -105,22 +130,24 @@ class Writer:
             self.parts.append(fence+'text\n'+text+'\n'+fence+'\n')
 
     def figure(self, path, caption, number, label):
-        title = label+' '+str(number)+'. '+caption
+        title = label+' '+str(number)+'. '+self.display_text(caption)
         if self.html:
             self.parts.append('<figure><img src="'+image_data(path)+'" alt="'+html.escape(title, quote=True)+'"><figcaption>'+html.escape(title)+'</figcaption></figure>')
         else:
             self.parts.append('!['+md(title)+']('+self.relative(path)+')\n\n'+md(title)+'\n')
 
     def table(self, headers, rows, caption=None):
-        headers = [' '.join(str(h).split()) for h in headers]
+        headers = [' '.join(self.display_text(h).split()) for h in headers]
         def cell(c):
-            return c if isinstance(c, dict) else {'text': str(c), 'number': False}
+            if isinstance(c, dict):
+                return {**c, 'text': self.display_text(c['text'])}
+            return {'text': self.display_text(c), 'number': False}
         rows = [[cell(c) for c in r] for r in rows]
         numeric = [bool(rows) and all(r[i].get('number') for r in rows) for i in range(len(headers))]
         if self.html:
             self.parts.append('<div class="table-wrap'+(' small-table' if len(rows) <= 8 else ' large-table')+'"><table>')
             if caption:
-                self.parts.append('<caption>'+html.escape(caption)+'</caption>')
+                self.parts.append('<caption>'+html.escape(self.display_text(caption))+'</caption>')
             self.parts.append('<thead><tr>'+''.join('<th scope="col"'+(' class="number"' if numeric[i] else '')+'>'+html.escape(h)+'</th>' for i, h in enumerate(headers))+'</tr></thead><tbody>')
             for row in rows:
                 self.parts.append('<tr>')

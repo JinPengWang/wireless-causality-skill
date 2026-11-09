@@ -1,5 +1,6 @@
 """Configured association, predictive and paired-design investigations, with failures retained."""
 import math
+import re
 from collections import Counter, defaultdict
 from common import finite_number, known_identity, require_keys
 
@@ -146,9 +147,10 @@ def association(request, task, rows):
     results = []
     for recording, sample in sorted(grouped(rows).items()):
         valid = [r for r in sample if all(r['values'].get(k) is not None for k in names + [yname])]
+        included_indices = {r['_row_index'] for r in valid}
         result = {'recording_id': recording, 'unit_id': sample[0]['unit_id'],
                   'included_rows': [r['_row_index'] for r in valid],
-                  'excluded_rows': [r['_row_index'] for r in sample if r not in valid]}
+                  'excluded_rows': [r['_row_index'] for r in sample if r['_row_index'] not in included_indices]}
         try:
             beta, diagnostics = fit([[r['values'][n] for n in names] for r in valid], [r['values'][yname] for r in valid])
             result.update(status='executed', coefficient=float(beta[1]),
@@ -167,6 +169,59 @@ def association(request, task, rows):
                             'Residual lag1 correlation is descriptive across retained adjacent observations; inspect gaps.']}
 
 
+def unit_holdouts(recordings, examples_by_recording, min_test_rows):
+    """Score all declared units using only regular-grid examples from other units for fitting."""
+    import numpy as np
+    by_unit = defaultdict(list)
+    for recording in recordings:
+        if known_identity(recording['unit_id']):
+            by_unit[recording['unit_id']].append(recording)
+    heldout = []
+    for unit, target in sorted(by_unit.items()):
+        training = []
+        training_units = []
+        for other, members in sorted(by_unit.items()):
+            if other != unit:
+                examples = [x for member in members for x in examples_by_recording.get(member['recording_id'], [])]
+                if examples:
+                    training_units.append(other)
+                    training.extend(examples)
+        eligible, excluded = [], []
+        for member in target:
+            recording = member['recording_id']
+            examples = examples_by_recording.get(recording)
+            if examples is None:
+                excluded.append({'recording_id': recording, 'reason': member['reason']})
+            elif len(examples) < min_test_rows:
+                excluded.append({'recording_id': recording, 'reason': 'Too few complete lagged rows for scoring',
+                                 'complete_rows': len(examples), 'min_test_rows': min_test_rows})
+            else:
+                eligible.append((recording, examples))
+        entry = {'unit_id': unit, 'training_units': training_units, 'recordings': [], 'excluded_recordings': excluded}
+        try:
+            if not eligible:
+                raise Unsupported('No recording in the held-out unit has sufficient usable lagged examples')
+            if not training:
+                raise Unsupported('No other known independent unit has usable lagged training examples')
+            baseline, _ = fit([x[1] for x in training], [x[3] for x in training])
+            expanded, _ = fit([x[2] for x in training], [x[3] for x in training])
+            for recording, examples in eligible:
+                y = np.asarray([x[3] for x in examples])
+                errors = []
+                for beta, column in [(baseline, 1), (expanded, 2)]:
+                    features = np.column_stack([np.ones(len(y)), [x[column] for x in examples]])
+                    errors.append(finite_number(np.mean((y - features @ beta) ** 2), 'held-out-unit MSE'))
+                entry['recordings'].append({'recording_id': recording, 'delta_mse': errors[0] - errors[1],
+                                            'test_rows': [x[4] for x in examples]})
+            entry['status'] = 'partial' if excluded else 'executed'
+        except Unsupported as exc:
+            entry.update(status='unsupported', reason=str(exc))
+        except Exception as exc:
+            entry.update(status='failed', error_type=type(exc).__name__, reason=str(exc))
+        heldout.append(entry)
+    return heldout
+
+
 def prediction(request, task, rows):
     import numpy as np
     config = task.get('prediction', {})
@@ -178,7 +233,7 @@ def prediction(request, task, rows):
         raise ValueError('train_fraction must lie strictly between 0 and 1')
     gap = integer(config.get('gap_steps', lag), 'gap_steps', minimum=lag)
     min_test = integer(config.get('min_test_rows'), 'min_test_rows')
-    units, results = {}, []
+    examples_by_recording, results = {}, []
     for recording, sample in sorted(grouped(rows).items()):
         result = {'recording_id': recording, 'unit_id': sample[0]['unit_id']}
         try:
@@ -193,6 +248,8 @@ def prediction(request, task, rows):
                 if any(v is None for v in base + [x, y]):
                     continue
                 examples.append((i, base, base + [x], y, current['_row_index']))
+            # A recording can be scored by an external model even if its own fit is rank deficient.
+            examples_by_recording[recording] = examples
             cutoff = int(len(sample) * fraction)
             train = [v for v in examples if v[0] < cutoff]
             test = [v for v in examples if v[0] >= cutoff + gap]
@@ -204,38 +261,17 @@ def prediction(request, task, rows):
                 design = np.column_stack([np.ones(len(test)), np.array([v[which] for v in test])])
                 return finite_number(float(np.mean((np.array([v[3] for v in test]) - design @ beta) ** 2)), 'held-out MSE; rescale through a reviewed unit mapping if necessary')
             mse0, mse1 = mse(b0, 1), mse(b1, 2)
+            included_indices = {v[4] for v in train + test}
             result.update(status='executed', train_rows=[v[4] for v in train], test_rows=[v[4] for v in test],
-                          excluded_or_gap_rows=[r['_row_index'] for r in sample if r['_row_index'] not in {v[4] for v in train + test}],
+                          excluded_or_gap_rows=[r['_row_index'] for r in sample if r['_row_index'] not in included_indices],
                           baseline_mse=mse0, expanded_mse=mse1, delta_mse=mse0-mse1,
                           training_diagnostics={'baseline': d0, 'expanded': d1})
-            units[recording] = (sample[0]['unit_id'], examples)
         except Unsupported as exc:
             result.update(status='unsupported', reason=str(exc))
         except Exception as exc:
             result.update(status='failed', error_type=type(exc).__name__, reason=str(exc))
         results.append(result)
-    # Independent-unit holdout trains on other recordings, never joins their time axes.
-    heldout = []
-    for unit in sorted({u for u, _ in units.values() if known_identity(u)}):
-        training = [v for u, examples in units.values() if known_identity(u) and u != unit for v in examples]
-        entry = {'unit_id': unit, 'training_units': sorted({u for u, _ in units.values() if known_identity(u) and u != unit})}
-        try:
-            b0, _ = fit([v[1] for v in training], [v[3] for v in training])
-            b1, _ = fit([v[2] for v in training], [v[3] for v in training])
-            scores = []
-            for recording, (u, examples) in units.items():
-                if u != unit:
-                    continue
-                y = np.asarray([v[3] for v in examples])
-                errors = [finite_number(float(np.mean((y - np.column_stack([np.ones(len(y)), np.array([v[col] for v in examples])]) @ b) ** 2)), 'held-out-unit MSE')
-                          for b, col in [(b0, 1), (b1, 2)]]
-                scores.append({'recording_id': recording, 'delta_mse': errors[0]-errors[1], 'test_rows': [v[4] for v in examples]})
-            entry.update(status='executed', recordings=scores)
-        except Unsupported as exc:
-            entry.update(status='unsupported', reason=str(exc))
-        except Exception as exc:
-            entry.update(status='failed', error_type=type(exc).__name__, reason=str(exc))
-        heldout.append(entry)
+    heldout = unit_holdouts(results, examples_by_recording, min_test)
     if not heldout:
         heldout.append({'status': 'unsupported', 'reason': 'Independent-unit holdout needs known independent units and usable recordings'})
     uncertainty = request.get('relative_clock_uncertainty_s')
@@ -255,6 +291,52 @@ def prediction(request, task, rows):
                             'Cross-unit fits weight training rows equally; testing reports every recording without pooling units.']}
 
 
+def unresolved_randomized_design(design):
+    """Screen declared prerequisites; substantive design review still belongs to the investigator."""
+    fields = ('assignment_evidence', 'estimand', 'population', 'time_horizon',
+              'carryover_assessment', 'interference_assessment', 'missingness_assessment')
+    # Normalize the small vocabulary this screen understands. Preserve the original
+    # evidence in the configuration returned to the reviewer.
+    spelling = str.maketrans('隨機狀態證據錄無沒適詳暫評為：', '随机状态证据录无没适详暂评为:')
+    assignment_label = (r'(?:randomization|assignment|allocation)(?: status| method| evidence)?'
+                        r'|随机(?:化|分配)(?:状态|方式|证据|依据)?')
+    incompatible_assignment = (
+        r'\b(?:not randomized|not randomly (?:assigned|allocated)|nonrandom(?:ized)?)\b',
+        r'\bno (?:record|evidence) of (?:randomization|random(?:ized)? (?:assignment|allocation))\b'
+        r'(?!\s+(?:errors?|failures?|violations?|bias|imbalance)\b)',
+        r'\bno (?:randomization|random (?:assignment|allocation))'
+        r'(?=$|[.;,:]|\s+(?:was|is|for|in|record|log|evidence)\b)',
+        r'\b(?:randomization|assignment)(?: status| method| evidence)? (?:is |was )?(?:unknown|unavailable|not recorded|not documented|missing)\b',
+        r'(?:未随机|非随机|没有随机分配|随机(?:化|分配)(?:状态|方式|证据|依据)?(?:为)?(?:未知|缺失|未记录|未提供))',
+    )
+    unresolved = []
+    for field in fields:
+        value = design.get(field)
+        if not isinstance(value, str):
+            unresolved.append(field)
+            continue
+        note = ' '.join(value.casefold().split()).translate(spelling).strip(' .:;!?。；！？<>[]()')
+        if field.endswith('_assessment'):
+            # An inapplicable risk can be a substantive assessment. Test the
+            # explanation itself for an empty or unresolved value.
+            note = re.sub(r'^(?:not applicable|n/a|不适用)(?:\s*[:,，;；-]\s*|\s+because\s+)', '', note)
+        if field == 'assignment_evidence':
+            note = re.sub(r'non[- ]random', 'nonrandom', note.replace('randomis', 'randomiz'))
+            note = re.sub(rf'^(?:{assignment_label})\s*[:=]\s*', '', note)
+        if (not known_identity(note) or note in {'-', '--', 'pending', 'missing', 'no evidence', '无', '缺失'}
+                or re.match(r'^(?:replace_|(?:todo|tbd)(?:\b|_)|(?:unknown|unavailable|unverified|undocumented|n/a)\b|'
+                            r'not (?:applicable|available|assessed|recorded|provided|known|verified|documented)\b|'
+                            r'未知|不清楚|不详|待定|待填|未提供|暂无|不适用|未评估)', note)):
+            unresolved.append(field)
+        elif field == 'assignment_evidence' and any(re.search(pattern, note) for pattern in incompatible_assignment):
+            unresolved.append(field)
+    if design.get('assignment_unit') != 'independent_pair':
+        unresolved.append('assignment_unit')
+    if 'assignment_status' in design and design['assignment_status'] != 'documented':
+        unresolved.append('assignment_status')
+    return unresolved
+
+
 def paired_contrast(request, task, rows):
     import itertools
     import numpy as np
@@ -272,7 +354,7 @@ def paired_contrast(request, task, rows):
             treatment = int(next(iter(treatments)))
             result.update(status='executed', treatment=treatment, mean=float(np.mean([r['values'][yname] for r in valid])),
                           included_rows=[r['_row_index'] for r in valid],
-                          excluded_rows=[r['_row_index'] for r in sample if r not in valid])
+                          excluded_rows=[r['_row_index'] for r in sample if r['values'].get(yname) is None])
             by_unit[result['unit_id']][treatment].append(result)
         recordings.append(result)
     pairs, excluded = [], []
@@ -296,12 +378,12 @@ def paired_contrast(request, task, rows):
     p_value = None
     inference = {'status': 'not_identified', 'reason': 'Observed matched contrast does not establish exchangeability.'}
     if kind == 'randomized_paired':
-        for key in ['assignment_evidence', 'estimand', 'population', 'time_horizon', 'carryover_assessment', 'interference_assessment', 'missingness_assessment']:
-            text(design.get(key), 'randomized design ' + key)
-        if design.get('assignment_unit') != 'independent_pair':
-            raise Unsupported('Exact paired randomization requires one exchangeable label swap per independent pair')
+        unresolved = unresolved_randomized_design(design)
         differences = [r['difference'] for r in pairs]
-        if not 2 <= len(differences) <= 16:
+        if unresolved:
+            inference = {'status': 'not_identified', 'reason': 'The declared paired randomization design has unresolved prerequisites',
+                         'unresolved_fields': unresolved}
+        elif not 2 <= len(differences) <= 16:
             inference = {'status': 'unsupported', 'reason': 'Exact randomization backend supports 2..16 independent pairs; no silent approximation.'}
         else:
             observed = abs(float(np.mean(differences)))
@@ -358,12 +440,16 @@ def analyze(request, data):
                     if method not in BACKENDS:
                         raise Unsupported('Backend is not implemented here: ' + str(method))
                     result = BACKENDS[method](request, task, rows)
-                    count = Counter(r['status'] for r in result['recordings'])
-                    status = 'executed' if count['executed'] == len(result['recordings']) else ('partial' if count['executed'] else ('failed' if count['failed'] else 'unsupported'))
-                    if result.get('held_out_units') and any(r['status'] != 'executed' for r in result['held_out_units']):
-                        status = 'partial' if count['executed'] else ('failed' if count['failed'] else 'unsupported')
-                    if result.get('excluded_units') or result.get('inference', {}).get('status') == 'unsupported':
-                        status = 'partial' if count['executed'] else ('failed' if count['failed'] else 'unsupported')
+                    statuses = {r['status'] for r in result['recordings'] + result.get('held_out_units', [])}
+                    inference = result.get('inference', {})
+                    if result.get('excluded_units') or inference.get('status') == 'unsupported' or inference.get('unresolved_fields'):
+                        statuses.add('unsupported')
+                    if statuses == {'executed'}:
+                        status = 'executed'
+                    elif statuses.intersection({'executed', 'partial'}):
+                        status = 'partial'
+                    else:
+                        status = 'failed' if 'failed' in statuses else 'unsupported'
                     if method == 'paired_contrast' and not result['pairs']:
                         status = 'unsupported'
                     output.update(status=status, method=method, result=result)

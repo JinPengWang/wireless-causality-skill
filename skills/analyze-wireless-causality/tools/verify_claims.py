@@ -17,6 +17,18 @@ def finite_number(value, label, positive=False):
     return basic_number(value, label, positive)
 
 
+def arithmetic_number(value):
+    """Keep exact integer intermediates while checking each result can round-trip through float64."""
+    number = basic_number(value, 'arithmetic value')
+    if type(value) is int:
+        if number != value:
+            raise ValueError('Inexact integer intermediate in float64; use a reviewed exact-arithmetic adapter')
+        return value
+    if abs(number) <= 2**53 and number.is_integer():
+        return int(number)
+    return number
+
+
 @dataclass
 class Quantity:
     value: object
@@ -109,7 +121,7 @@ def expression_value(expression, operands):
     def scalar(q):
         if isinstance(q.value, list):
             raise ValueError('Reduce vectors explicitly with sum/mean/min/max/count')
-        return finite_number(q.value, 'expression value')
+        return arithmetic_number(q.value)
     def visit(node):
         if isinstance(node, ast.Name) and node.id in operands:
             return operands[node.id]
@@ -124,13 +136,13 @@ def expression_value(expression, operands):
             if isinstance(node.op, (ast.Add, ast.Sub)):
                 if left.dimensions != right.dimensions:
                     raise ValueError('Cannot add or subtract incompatible units')
-                return Quantity(a+b if isinstance(node.op, ast.Add) else a-b, left.dimensions)
+                return Quantity(arithmetic_number(a+b if isinstance(node.op, ast.Add) else a-b), left.dimensions)
             sign = -1 if isinstance(node.op, ast.Div) else 1
             dims = dict(left.dimensions)
             for k, v in right.dimensions.items():
                 dims[k] = dims.get(k, 0) + sign*v
             value = a/b if sign == -1 else a*b
-            return Quantity(finite_number(value, 'calculated value'), {k:v for k,v in dims.items() if v})
+            return Quantity(arithmetic_number(value), {k:v for k,v in dims.items() if v})
         if isinstance(node, ast.Call) and isinstance(node.func, ast.Name) and len(node.args) == 1 and not node.keywords:
             name = node.func.id
             q = visit(node.args[0])
@@ -140,8 +152,15 @@ def expression_value(expression, operands):
                 raise ValueError('Unsupported function or non-vector aggregate')
             if name == 'count':
                 return Quantity(float(len(q.value)), {'count': 1})
-            fn = {'sum': math.fsum, 'mean': lambda v:math.fsum(v)/len(v), 'min': min, 'max': max}[name]
-            return Quantity(finite_number(fn(q.value), 'aggregate'), q.dimensions)
+            if name in {'sum', 'mean'}:
+                values = [arithmetic_number(v) for v in q.value]
+                total = sum(values) if all(type(v) is int for v in values) else math.fsum(values)
+                value = arithmetic_number(total)
+                if name == 'mean':
+                    value /= len(values)
+            else:
+                value = min(q.value) if name == 'min' else max(q.value)
+            return Quantity(arithmetic_number(value), q.dimensions)
         raise ValueError('Unsupported expression; attributes, indexing and arbitrary code are forbidden')
     result = visit(tree.body)
     scalar(result)
@@ -200,7 +219,10 @@ def verify(bundle, base):
                         raise ValueError('Artifact unit disagrees with declared operand unit')
                     unit_check = 'matches_artifact_field'
                 values = [finite_number(v, 'source value') for v in value] if isinstance(value, list) else finite_number(value, 'source value')
-                operands[name] = Quantity([v*scale for v in values] if isinstance(values, list) else values*scale, dims)
+                factor = arithmetic_number(scale)
+                def scale_value(v):
+                    return arithmetic_number(arithmetic_number(v) * factor)
+                operands[name] = Quantity([scale_value(v) for v in values] if isinstance(values, list) else scale_value(values), dims)
                 result['operands'][name] = {'artifact': binding['artifact'], 'locator': binding['locator'],
                                             'source_value': values, 'unit': unit, 'unit_check': unit_check,
                                             'unit_basis': binding['unit_basis']}

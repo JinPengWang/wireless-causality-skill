@@ -23,6 +23,7 @@ a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 figure { margin: 24px 0; }
 figure img { display: block; width: 100%; height: auto; }
 figcaption { margin-top: 9px; }
+figure:has(+ .visual-reading) { margin-bottom: 9px; }
 .table-wrap { margin: 20px 0; overflow-x: auto; }
 table { border-collapse: collapse; width: 100%; table-layout: fixed; font-size: .9rem; }
 caption { text-align: left; margin-bottom: 8px; }
@@ -53,6 +54,7 @@ footer { margin-top: 40px; padding-top: 14px; border-top: 1px solid var(--rule);
   h1, h2, h3, dt, caption { break-after: avoid; }
   figure { break-inside: avoid; margin: 14pt 0; }
   figure img { max-height: 185mm; object-fit: contain; }
+  .visual-reading, .meta:has(+ .visual-reading) { break-before: avoid; }
   table { font-size: 9.5pt; }
   thead { display: table-header-group; }
   tr { break-inside: avoid; }

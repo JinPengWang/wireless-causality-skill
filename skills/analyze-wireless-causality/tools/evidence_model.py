@@ -1,9 +1,7 @@
 """Validate presentation-independent investigation ledgers and evidence scope."""
-import argparse
-import os
 import re
 from pathlib import Path
-from common import read_json, sha256
+from common import sha256
 from verify_claims import verify as verify_numeric_claims, select
 
 STATUSES = {'candidate', 'supported_candidate', 'validated_mechanism', 'unresolved', 'refuted'}
@@ -25,24 +23,9 @@ def verify_locator(path, locator, cache=None):
         text_field(locator.get('text'), 'locator description')
         return 'unverified_description'
     if kind == 'json_pointer':
-        pointer = locator.get('pointer')
-        if path.suffix.lower() != '.json' or not isinstance(pointer, str) or (pointer and not pointer.startswith('/')):
-            raise ValueError('json_pointer requires a JSON artifact and an empty or slash-prefixed pointer')
-        if cache is None:
-            cache = {}
-        if path not in cache:
-            cache[path] = read_json(path)
-        value = cache[path]
-        for raw in pointer.split('/')[1:] if pointer else []:
-            if re.search(r'~(?![01])', raw):
-                raise ValueError('Invalid JSON pointer escape')
-            token = raw.replace('~1', '/').replace('~0', '~')
-            if isinstance(value, dict) and token in value:
-                value = value[token]
-            elif isinstance(value, list) and re.fullmatch(r'0|[1-9][0-9]*', token) and int(token) < len(value):
-                value = value[int(token)]
-            else:
-                raise ValueError('Evidence JSON pointer does not resolve: ' + pointer)
+        if 'pointer' not in locator:
+            raise ValueError('Supply a JSON pointer')
+        select(path, locator, {} if cache is None else cache)
         return 'verified_json_pointer'
     if kind == 'line_range':
         start, end = locator.get('start'), locator.get('end')
@@ -57,6 +40,47 @@ def verify_locator(path, locator, cache=None):
         select(path, locator, {} if cache is None else cache)
         return 'verified_table_rows_and_field'
     raise ValueError('Unsupported locator type')
+
+
+def specific_result(path, locator, cache):
+    """Check the location and, for bundled causal output, its executed analysis."""
+    if path.suffix.lower() != '.json':
+        return locator['type'] in {'line_range', 'table_rows', 'table_cell'}
+    if locator['type'] != 'json_pointer':
+        return False
+    value = select(path, locator, cache)
+    pointer = locator['pointer']
+    if value is None or value == '' or (isinstance(value, (dict, list)) and (not pointer or not value)):
+        return False
+    document = cache[path]
+    bundled_fields = {'analyses', 'configuration', 'execution_summary', 'has_execution_failures',
+                      'n_declared_independent_units', 'causal_truth_verified'}
+    if (not isinstance(document, dict) or document.get('schema_version') != 1
+            or not bundled_fields <= document.keys()):
+        return True
+    match = re.fullmatch(r'/analyses/(0|[1-9][0-9]*)/result(?:/(.*))?', pointer)
+    if not match or not isinstance(document['analyses'], list):
+        return False
+    analysis = document['analyses'][int(match[1])]
+    result = analysis['result']
+    if analysis.get('status') not in {'executed', 'partial'} or not isinstance(result, dict):
+        return False
+    # An association or prediction alone cannot serve as the validation result
+    # for a scoped intervention or confirmed mechanism.
+    if result.get('claim_type') != 'intervention_effect' or result.get('inference', {}).get('status') != 'executed':
+        return False
+    subpath = match[2]
+    if subpath is None or subpath in {'pairs', 'summary'}:
+        return True
+    # IDs, self-assessments and limitation text are context, even when nested
+    # in an otherwise valid pair or summary. Accept the pair record or its effect.
+    if isinstance(value, dict):
+        return re.fullmatch(r'pairs/[0-9]+', subpath) is not None and type(value.get('difference')) in (int, float)
+    if type(value) not in (int, float):
+        return False
+    return (subpath in {'p_value', 'summary/equal_unit_mean', 'summary/min_unit_value', 'summary/max_unit_value'}
+            or re.fullmatch(r'pairs/[0-9]+/difference|summary/unit_values/[0-9]+/value|'
+                            r'summary/leave_one_unit_out/[0-9]+/estimate', subpath) is not None)
 
 
 def verify_figure(path):
@@ -110,12 +134,14 @@ def validate_evidence(report, base, cache=None, *, _numerical_results=None):
                 raise ValueError('Every item requires evidence artifacts')
             if not isinstance(item['figures'], list):
                 raise ValueError('figures must be a list; an empty list is valid')
-            located = {}
+            machine_located = set()
             for evidence in item['evidence']:
                 path = (base / evidence['path']).resolve()
                 if not path.is_file() or sha256(path) != evidence.get('sha256'):
                     raise ValueError('Missing or changed evidence artifact')
-                located[evidence['path']] = verify_locator(path, evidence.get('locator'), cache)
+                status = verify_locator(path, evidence.get('locator'), cache)
+                if not status.startswith('unverified'):
+                    machine_located.add(evidence['path'])
             for figure in item['figures']:
                 path = (base / figure['path']).resolve()
                 if not path.is_file() or sha256(path) != figure.get('sha256'):
@@ -134,8 +160,7 @@ def validate_evidence(report, base, cache=None, *, _numerical_results=None):
                     validation = item.get('validation', {})
                     for key in ['design', 'independent_replication', 'reviewer_assessment']:
                         text_field(validation.get(key), 'validation ' + key)
-                    status = located.get(validation.get('result_path'))
-                    if status is None or status.startswith('unverified'):
+                    if validation.get('result_path') not in machine_located:
                         raise ValueError('Validation result requires a hashed artifact with a machine-checkable locator')
     if report['schema_version'] == 3:
         checks = validate_v3(report, base, cache)
@@ -225,7 +250,13 @@ def validate_v3(report, base, cache):
                     for key in ['design', 'independent_replication', 'reviewer_assessment', 'identification_scope']:
                         text_field(validation.get(key), 'validation ' + key)
                     linked = [a for a in item['evidence'] if a['path'] == validation.get('result_path')]
-                    if not linked or not any(a['locator']['type'] in {'json_pointer', 'line_range', 'table_rows', 'table_cell'} for a in linked):
+                    if not linked:
+                        raise ValueError('Validation result_path must identify linked evidence')
+                    path = (base / validation['result_path']).resolve()
+                    roles = {a['role'] for a in report.get('provenance', {}).get('artifacts', [])
+                             if (base / a['path']).resolve() == path}
+                    if roles == {'configuration'} or not any(
+                            specific_result(path, a['locator'], cache) for a in linked):
                         raise ValueError('Scoped effect/validated mechanism needs a specific located result')
     if referenced != all_claims:
         raise ValueError('Every numerical claim must be linked to its supported report item')

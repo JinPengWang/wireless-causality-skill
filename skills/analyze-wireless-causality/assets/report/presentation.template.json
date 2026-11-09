@@ -1,7 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "language": "en",
   "summary_ids": [],
   "item_titles": {},
+  "readings": {},
   "tables": []
 }

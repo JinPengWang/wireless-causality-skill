@@ -74,14 +74,21 @@ def number_text(value, digits=4):
 
 def presentation_options(report, presentation, checks, theme):
     p = {} if presentation is None else presentation
+    if not isinstance(p, dict):
+        raise ValueError('Presentation must be an object')
+    version = p.get('schema_version', 1)
+    if type(version) is not int or version not in (1, 2):
+        raise ValueError('Presentation schema_version must be 1 or 2')
     allowed = {'schema_version', 'language', 'labels', 'summary_ids', 'item_titles', 'tables'}
-    if not isinstance(p, dict) or set(p) - allowed:
+    if version == 2:
+        allowed.add('readings')
+    if set(p) - allowed:
         raise ValueError('Unknown presentation fields')
-    if 'schema_version' in p and (type(p['schema_version']) is not int or p['schema_version'] != 1):
-        raise ValueError('Presentation schema_version must be 1')
     if 'language' in p and p['language'] != report.get('language', 'en'):
         raise ValueError('Presentation language must match the ledger')
-    items = {i['id']: i for s in ['phenomena', 'findings'] for i in report[s]}
+    sections = {'phenomena': report['phenomena'],
+                'findings': sorted(report['findings'], key=lambda item: (item['priority'], item['id']))}
+    items = {item['id']: item for group in sections.values() for item in group}
     summary = p.get('summary_ids', [])
     if not isinstance(summary, list) or any(not isinstance(i, str) or i not in items for i in summary) or len(set(summary)) != len(summary):
         raise ValueError('summary_ids must select distinct existing evidence items')
@@ -136,6 +143,36 @@ def presentation_options(report, presentation, checks, theme):
         width = theme['table_columns'] - 1
         for offset in range(1, len(columns), width):
             selection = [0]+list(range(offset, min(offset+width, len(columns))))
-            tables.append({**table, 'id': tid+'-'+str(offset), 'columns': [columns[i] for i in selection],
-                           'rows': [[r[i] for i in selection] for r in rows], 'continued': offset > 1})
-    return {'summary_ids': summary, 'item_titles': titles, 'tables': tables}
+            tables.append({**table, 'id': tid+'-'+str(offset), 'logical_id': tid,
+                           'columns': [columns[i] for i in selection],
+                           'rows': [[r[i] for i in selection] for r in rows],
+                           'continued': offset > 1, 'last_part': offset + width >= len(columns)})
+    # Order first by the owner's final location, then by stable order within the item.
+    item_order = {identity: index for index, identity in enumerate(items)}
+    tables.sort(key=lambda part: item_order[part['owner']])
+    reference_numbers = {}
+    for number, part in enumerate(tables, start=1):
+        part['number'] = number
+        reference_numbers.setdefault('table:'+part['logical_id'], number)
+    readings = p.get('readings', {})
+    if version == 2:
+        figures = (figure for item in items.values() for figure in item['figures'])
+        for number, figure in enumerate(figures, start=1):
+            identity = figure.get('id')
+            if not isinstance(identity, str) or not re.fullmatch(r'[A-Za-z0-9_-]+', identity):
+                raise ValueError('Presentation v2 requires a stable ASCII figure id on each ledger figure')
+            key = 'figure:'+identity
+            if key in reference_numbers:
+                raise ValueError('Duplicate figure id: '+identity)
+            reference_numbers[key] = number
+        if not isinstance(readings, dict):
+            raise ValueError('readings must map figure:<id> and table:<id> to prose')
+        if readings.keys() != reference_numbers.keys():
+            missing = sorted(reference_numbers.keys() - readings.keys())
+            unknown = sorted(str(k) for k in readings.keys() - reference_numbers.keys())
+            raise ValueError(f'Reading coverage mismatch; missing={missing}, unknown={unknown}')
+        for key, reading in readings.items():
+            if not isinstance(reading, str) or not reading.strip():
+                raise ValueError('A nonempty plain-text reading is required for '+key)
+    return {'summary_ids': summary, 'item_titles': titles, 'tables': tables, 'sections': sections,
+            'readings': readings, 'reference_numbers': reference_numbers if version == 2 else None}

@@ -129,7 +129,7 @@ def _plot(windows, output_dir, mode, min_coverage, protected_paths, theme, label
                 fig.savefig(root / (name + '.svg'))
             finally:
                 plt.close(fig)
-            artifacts.append({'path': str((root / (name + '.png')).resolve()), 'direction': direction,
+            artifacts.append({'id': name, 'path': str((root / (name + '.png')).resolve()), 'direction': direction,
                               'condition': condition, 'metric': metric, 'unit': unit, 'mode': mode,
                               'measurement_signature': list(measurement_signature(rows[0])), 'min_coverage': min_coverage,
                               'entities': included_entities, 'entity_styles': {e: styles[e] for e in included_entities},

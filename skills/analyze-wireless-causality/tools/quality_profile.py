@@ -2,7 +2,7 @@
 import argparse
 import math
 from pathlib import Path
-from common import finite_number, number, read_json, require_keys, sha256, table_rows, write_json
+from common import finite_number, grid_position, number, read_json, require_keys, sha256, table_rows, write_json
 
 
 def profile(request):
@@ -77,8 +77,8 @@ def profile(request):
         value = raw*scale-origin if raw is not None else None
         if value is None or not math.isfinite(value):
             add(g['invalid_times'], {'source_row':rowno}); g['_previous'] = None; continue
-        position = value/width
-        if not math.isfinite(position) or abs(position) > 2**52:
+        position = grid_position(value, width)
+        if abs(position) > 2**52:
             raise ValueError('Time grid exceeds usable precision')
         index = math.floor(position)
         if index not in g['_bins']:

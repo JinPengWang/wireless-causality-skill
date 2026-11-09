@@ -59,6 +59,8 @@ def paired_compare(summaries, reference, seed=0, bootstrap=1000, min_pairs=8):
     if any(type(x) is not int for x in [seed, bootstrap, min_pairs]) or seed < 0 or min_pairs < 2 or bootstrap < 100:
         raise ValueError('Invalid seed or inference budget')
     strata = defaultdict(dict)
+    cohort_runs = defaultdict(list)
+    excluded_runs = defaultdict(list)
     entities, contracts = set(), {}
     for s in summaries:
         entities.add(s['entity'])
@@ -67,10 +69,18 @@ def paired_compare(summaries, reference, seed=0, bootstrap=1000, min_pairs=8):
         if family in contracts and contracts[family] != signature:
             raise ValueError('Incompatible measurement contracts: harmonize definitions and weighting before comparison')
         contracts[family] = signature
+        cohort_key = (family, s['entity'])
+        cohort_runs[cohort_key].append(s)
+        reasons = []
         if s['mean'] is None:
-            continue
-        finite_number(s['mean'], 'summary mean')
-        if not all(known_identity(s[k]) for k in ['pair_id', 'condition', 'direction', 'entity']):
+            reasons.append('no_valid_mean')
+        else:
+            finite_number(s['mean'], 'summary mean')
+        reasons.extend('unknown_' + k for k in ['pair_id', 'condition', 'direction', 'entity']
+                       if not known_identity(s[k]))
+        if reasons:
+            excluded_runs[cohort_key].append({'run_id': s['run_id'], 'condition': s['condition'],
+                                              'pair_id': s['pair_id'], 'reasons': reasons})
             continue
         key = (s['direction'], s['condition'], s['pair_id'], s['metric'], s['unit'])
         if s['entity'] in strata[key]:
@@ -78,11 +88,22 @@ def paired_compare(summaries, reference, seed=0, bootstrap=1000, min_pairs=8):
         strata[key][s['entity']] = s
     if reference not in entities:
         raise ValueError('Reference entity absent')
+
+    def coverage(family, entity, matched):
+        key = (family, entity)
+        registered = cohort_runs.get(key, [])
+        excluded = excluded_runs.get(key, [])
+        return {'registered_runs': len(registered), 'analyzable_runs': len(registered) - len(excluded),
+                'matched_runs': matched, 'excluded_before_matching': excluded,
+                'matched_fraction_of_registered_runs': matched / len(registered) if registered else None}
+
     output = []
-    families = {(k[0], k[3], k[4]) for k in strata}
-    for direction, metric, unit in sorted(families):
+    for family in sorted(contracts):
+        direction, metric, unit = family
         for target in sorted(entities - {reference}):
-            keys = sorted(k for k in strata if (k[0], k[3], k[4]) == (direction, metric, unit))
+            if (family, reference) not in cohort_runs and (family, target) not in cohort_runs:
+                continue
+            keys = sorted(k for k in strata if (k[0], k[3], k[4]) == family)
             refkeys = [k for k in keys if reference in strata[k]]
             targetkeys = [k for k in keys if target in strata[k]]
             common = [k for k in refkeys if target in strata[k]]
@@ -100,16 +121,21 @@ def paired_compare(summaries, reference, seed=0, bootstrap=1000, min_pairs=8):
             pairs = [{'pair_id': key, 'n_conditions': len(pair_differences[key]),
                       'target_minus_reference': float(np.mean(pair_differences[key]))} for key in sorted(pair_differences)]
             diffs = np.array([p['target_minus_reference'] for p in pairs])
+            blocked = 'blocked_no_common_support' if refkeys or targetkeys else 'blocked_no_eligible_pairs'
             row = {'reference': reference, 'target': target, 'direction': direction, 'metric': metric, 'unit': unit,
                    'measurement_signature': list(contracts[(direction, metric, unit)]),
                    'n_pairs': len(diffs), 'common_conditions': len(common),
                    'condition_contrasts': condition_contrasts, 'pair_contrasts': pairs,
+                   'reference_cohort': coverage(family, reference, len(common)),
+                   'target_cohort': coverage(family, target, len(common)),
+                   'support_fraction_basis': 'Matched runs divided by analyzable runs on each side; '
+                                             'see each cohort for coverage of all submitted runs.',
                    'reference_support_fraction': len(common) / len(refkeys) if refkeys else 0,
                    'target_support_fraction': len(common) / len(targetkeys) if targetkeys else 0,
                    'unmatched_reference': [list(k) for k in refkeys if k not in common],
                    'unmatched_target': [list(k) for k in targetkeys if k not in common],
                    'mean_target_minus_reference': float(diffs.mean()) if len(diffs) else None,
-                   'ci95': None, 'status': 'descriptive_paired' if len(diffs) else 'blocked_no_common_support'}
+                   'ci95': None, 'status': 'descriptive_paired' if len(diffs) else blocked}
             if len(diffs) >= min_pairs:
                 if bootstrap * len(diffs) > 10000000:
                     raise ValueError('Bootstrap budget exceeds 10 million draws')
@@ -118,7 +144,10 @@ def paired_compare(summaries, reference, seed=0, bootstrap=1000, min_pairs=8):
                 row['ci95'] = [float(x) for x in np.quantile(draws, [.025, .975])]
             row['assumptions'] = 'Equal weight per declared independent pair; conditions averaged within pair. CI assumes independence and is marginal, not simultaneous. Not a causal vendor effect.'
             output.append(row)
-    return output or [{'status': 'blocked_no_eligible_pairs', 'reason': 'Provide verified pair identities, conditions, directions and at least two entities'}]
+    return output or [{'status': 'blocked_no_eligible_pairs',
+                       'reason': 'Provide verified pair identities, conditions, directions and at least two entities',
+                       'cohorts': [{'direction': f[0], 'metric': f[1], 'unit': f[2], 'entity': entity,
+                                    **coverage(f, entity, 0)} for f, entity in sorted(cohort_runs)]}]
 
 
 def main():
